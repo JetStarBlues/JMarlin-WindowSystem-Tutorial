@@ -11,8 +11,8 @@
 
 struct _Context* gContext;  // hmmm...
 struct _Desktop* gDesktop;  // hmmm...
-uint16_t         gMouseX;
-uint16_t         gMouseY;
+int16_t          gMouseX;
+int16_t          gMouseY;
 uint8_t          gLeftBtnState;
 
 
@@ -231,8 +231,8 @@ struct _Context* context_new ( unsigned int width, unsigned int height )
 void context_fillRect (
 
 	struct _Context* context,
-	unsigned int     x,
-	unsigned int     y,
+	int              x,
+	int              y,
 	unsigned int     width,
 	unsigned int     height,
 	uint32_t         color
@@ -257,6 +257,17 @@ void context_fillRect (
 		maxY = context->height;
 	}
 
+	if ( x < 0 )  // JK...
+	{
+		x = 0;
+	}
+
+	if ( y < 0 )
+	{
+		y = 0;
+	}
+
+
 	// Draw the rectangle
 	while ( y < maxY )
 	{
@@ -274,12 +285,24 @@ void context_fillRect (
 void context_setPixel (
 
 	struct _Context* context,
-	unsigned int     x,
-	unsigned int     y,
+	int              x,
+	int              y,
 	uint32_t         color
 )
 {
 	unsigned int idx;
+
+	// Check bounds
+	if (
+
+		( x < 0 )                ||
+		( x >= context->width )  ||
+		( y < 0 )                ||
+		( y >= context->height )
+	)
+	{
+		return;
+	}
 
 	idx = ( y * context->width ) + x;
 
@@ -293,8 +316,8 @@ void context_setPixel (
 
 struct _Window* window_new (
 
-	unsigned int     x,
-	unsigned int     y,
+	int              x,
+	int              y,
 	unsigned int     width,
 	unsigned int     height,
 	uint32_t         color,
@@ -338,7 +361,7 @@ void window_paint ( struct _Window* window )
 
 
 
-void cursor_paint ( struct _Context* context, unsigned int x, unsigned int y )
+void cursor_paint ( struct _Context* context, int x, int y )
 {
 	context_setPixel( context, x,     y,     0xFFFFFFFF );
 	context_setPixel( context, x - 1, y,     0x000000FF );
@@ -373,7 +396,10 @@ struct _Desktop* desktop_new ( struct _Context* context )
 	}
 
 
-	desktop->context = context;
+	desktop->context    = context;
+	desktop->mouseX     = 0;
+	desktop->mouseY     = 0;
+	desktop->dragTarget = NULL;
 
 	return desktop;
 }
@@ -381,8 +407,8 @@ struct _Desktop* desktop_new ( struct _Context* context )
 struct _Window* desktop_createWindow (
 
 	struct _Desktop* desktop,
-	unsigned int     x,
-	unsigned int     y,
+	int              x,
+	int              y,
 	unsigned int     width,
 	unsigned int     height,
 	uint32_t         color
@@ -441,7 +467,7 @@ void desktop_paint ( struct _Desktop* desktop )
 
 
 	// Draw mouse
-	// cursor_paint( desktop->context, desktop->mouseX, desktop->mouseY );
+	cursor_paint( desktop->context, desktop->mouseX, desktop->mouseY );
 }
 
 void desktop_raiseWindow ( struct _Desktop* desktop )
@@ -512,15 +538,13 @@ void desktop_dragWindow ( struct _Desktop* desktop )
 	*/
 	desktop->dragTarget->x = desktop->mouseX - desktop->dragOffsetX;
 	desktop->dragTarget->y = desktop->mouseY - desktop->dragOffsetY;
-
-// printf( "dragging\n" );
 }
 
 void desktop_processMouse (
 
 	struct _Desktop* desktop,
-	uint16_t         mouseX,
-	uint16_t         mouseY,
+	int16_t          mouseX,
+	int16_t          mouseY,
 	uint8_t          leftBtnState
 )
 {

@@ -25,8 +25,8 @@ struct _Context {
 
 struct _Window {
 
-	uint16_t x;
-	uint16_t y;
+	int16_t  x;
+	int16_t  y;
 	uint16_t width;
 	uint16_t height;
 	uint32_t color;
@@ -42,8 +42,8 @@ struct _Desktop {
 
 	// mouse
 	uint8_t  prevLeftBtnState;
-	uint16_t mouseX;
-	uint16_t mouseY;
+	int16_t  mouseX;
+	int16_t  mouseY;
 
 	// drag
 	struct _Window* dragTarget;
