@@ -1,3 +1,5 @@
+// http://www.trackze.ro/wsbe-complicated-rectangles/
+
 #include <stdlib.h>
 #include <stdio.h>
 
@@ -8,6 +10,10 @@
 
 
 struct _Context* gContext;  // hmmm...
+struct _Desktop* gDesktop;  // hmmm...
+uint16_t         gMouseX;
+uint16_t         gMouseY;
+uint8_t          gLeftBtnState;
 
 
 
@@ -44,11 +50,28 @@ struct _List* list_new ( void )
 
 	list->nItems   = 0;
 	list->rootNode = NULL;
+	list->tailNode = NULL;
 
 	return list;
 }
 
-int list_addValue ( struct _List* list, void* value )
+/*
+   List is not circular. Ex:
+
+       a
+       .next = b
+       .prev = NULL
+           b
+           .next = c
+           .prev = a
+               c
+               .next = NULL
+               .prev = b
+
+       list.rootNode = a
+       list.tailNode = c
+*/
+int list_appendNode ( struct _List* list, void* value )
 {
 	struct _ListNode* newNode;
 	struct _ListNode* curNode;
@@ -79,6 +102,9 @@ int list_addValue ( struct _List* list, void* value )
 
 		curNode->next = newNode;
 		newNode->prev = curNode;
+
+		// Mark as new tail
+		list->tailNode = newNode;
 	}
 
 
@@ -88,17 +114,81 @@ int list_addValue ( struct _List* list, void* value )
 	return 1;
 }
 
-void* list_getNodeValue ( struct _List* list, unsigned int index )
+void* list_removeNode ( struct _List* list, unsigned int index )
 {
 	struct _ListNode* curNode;
+	void*             value;
 	unsigned int      i;
 
+	// Early exit
 	if ( ( list->nItems == 0 ) || ( index >= list->nItems ) )
 	{
 		return NULL;
 	}
 
 
+	// Find node
+	curNode = list->rootNode;
+	i       = 0;
+
+	while ( i < index )
+	{
+		curNode = curNode->next;
+
+		i += 1;
+	}
+
+	// Save value
+	value = curNode->value;
+
+
+	// Point neighbours to each other
+	if ( curNode->prev )
+	{
+		curNode->prev->next = curNode->next;
+	}
+
+	if ( curNode->next )
+	{
+		curNode->next->prev = curNode->prev;
+	}
+
+	// If node is root, make next node new root
+	if ( i == 0 )
+	{
+		list->rootNode = curNode->next;
+	}
+
+	// If node is tail, make prev node new tail
+	if ( i == 0 )
+	{
+		list->tailNode = curNode->prev;
+	}
+
+
+	//
+	free( curNode );
+
+	list->nItems -= 1;
+
+
+	//
+	return value;
+}
+
+void* list_getNodeValue ( struct _List* list, unsigned int index )
+{
+	struct _ListNode* curNode;
+	unsigned int      i;
+
+	// Early exit
+	if ( ( list->nItems == 0 ) || ( index >= list->nItems ) )
+	{
+		return NULL;
+	}
+
+
+	// Find node
 	curNode = list->rootNode;
 	i       = 0;
 
@@ -111,6 +201,7 @@ void* list_getNodeValue ( struct _List* list, unsigned int index )
 
 	return curNode->value;
 }
+
 
 
 
@@ -180,6 +271,21 @@ void context_fillRect (
 	}
 }
 
+void context_setPixel (
+
+	struct _Context* context,
+	unsigned int     x,
+	unsigned int     y,
+	uint32_t         color
+)
+{
+	unsigned int idx;
+
+	idx = ( y * context->width ) + x;
+
+	context->frameBuffer[ idx ] = color;
+}
+
 
 
 
@@ -191,8 +297,8 @@ struct _Window* window_new (
 	unsigned int     y,
 	unsigned int     width,
 	unsigned int     height,
-	struct _Context* context,
-	uint32_t         color  // temp
+	uint32_t         color,
+	struct _Context* context
 )
 {
 	struct _Window* window;
@@ -208,8 +314,8 @@ struct _Window* window_new (
 	window->y       = y;
 	window->width   = width;
 	window->height  = height;
+	window->color   = color;
 	window->context = context;
-	window->color   = color;  // temp
 
 	return window;
 }
@@ -227,6 +333,19 @@ void window_paint ( struct _Window* window )
 	);
 }
 
+
+
+
+
+
+void cursor_paint ( struct _Context* context, unsigned int x, unsigned int y )
+{
+	context_setPixel( context, x,     y,     0xFFFFFFFF );
+	context_setPixel( context, x - 1, y,     0x000000FF );
+	context_setPixel( context, x + 1, y,     0x000000FF );
+	context_setPixel( context, x,     y + 1, 0x000000FF );
+	context_setPixel( context, x,     y - 1, 0x000000FF );
+}
 
 
 
@@ -266,13 +385,13 @@ struct _Window* desktop_createWindow (
 	unsigned int     y,
 	unsigned int     width,
 	unsigned int     height,
-	uint32_t         color  // temp
+	uint32_t         color
 )
 {
 	struct _Window* window;
 	int             rStatus;
 
-	window = window_new( x, y, width, height, desktop->context, color );
+	window = window_new( x, y, width, height, color, desktop->context );
 
 	if ( window == NULL )
 	{
@@ -280,7 +399,7 @@ struct _Window* desktop_createWindow (
 	}
 
 
-	rStatus = list_addValue( desktop->children, ( void* ) window );
+	rStatus = list_appendNode( desktop->children, ( void* ) window );
 
 	if ( rStatus == 0 )
 	{
@@ -295,8 +414,6 @@ struct _Window* desktop_createWindow (
 
 void desktop_paint ( struct _Desktop* desktop )
 {
-	unsigned int    i;
-	// struct _Window* window;
 	struct _ListNode* child;
 
 	// Clear desktop
@@ -321,6 +438,128 @@ void desktop_paint ( struct _Desktop* desktop )
 
 		child = child->next;
 	}
+
+
+	// Draw mouse
+	// cursor_paint( desktop->context, desktop->mouseX, desktop->mouseY );
+}
+
+void desktop_raiseWindow ( struct _Desktop* desktop )
+{
+	struct _ListNode* child;
+	struct _Window*   window;
+	unsigned int      nChildren;
+	unsigned int      i;
+
+	nChildren = desktop->children->nItems;
+
+	if ( nChildren == 0 )
+	{
+		return;
+	}
+	else if ( nChildren == 1 )
+	{
+		child = desktop->children->rootNode;
+	}
+	else
+	{
+		child = desktop->children->tailNode;
+	}
+
+
+	i = nChildren - 1;
+
+	// Go through list backwards, because tail is topmost (drawn last)
+	while ( child != NULL )
+	{
+		window = ( struct _Window* ) child->value;
+
+		// Mouse inside window
+		if (
+
+			( desktop->mouseX >= window->x )                     &&
+			( desktop->mouseX < ( window->x + window->width ) )  &&
+			( desktop->mouseY >= window->y )                     &&
+			( desktop->mouseY < ( window->y + window->height ) )
+		)
+		{
+			// Raise window to top of list
+			list_removeNode( desktop->children, i );
+
+			list_appendNode( desktop->children, ( void* ) window );  // new tail
+
+
+			// Update drag target and offset...
+			desktop->dragTarget  = window;
+			desktop->dragOffsetX = desktop->mouseX - window->x;
+			desktop->dragOffsetY = desktop->mouseY - window->y;
+
+
+			// Done
+			break;
+		}
+
+
+		child  = child->prev;
+		i     -= 1;
+	}
+}
+
+void desktop_dragWindow ( struct _Desktop* desktop )
+{
+	/* Applying the offset makes sure that the corner of the
+	   window does not suddenly snap to the mouse location
+	*/
+	desktop->dragTarget->x = desktop->mouseX - desktop->dragOffsetX;
+	desktop->dragTarget->y = desktop->mouseY - desktop->dragOffsetY;
+
+// printf( "dragging\n" );
+}
+
+void desktop_processMouse (
+
+	struct _Desktop* desktop,
+	uint16_t         mouseX,
+	uint16_t         mouseY,
+	uint8_t          leftBtnState
+)
+{
+	// Save
+	desktop->mouseX = mouseX;
+	desktop->mouseY = mouseY;
+
+
+	// Button currently pressed
+	if ( leftBtnState )
+	{
+		// Button was previously released
+		if ( desktop->prevLeftBtnState == 0 )
+		{
+			// Raise pressed window
+			desktop_raiseWindow( desktop );
+		}
+	}
+
+	// Button currently released
+	else
+	{
+		desktop->dragTarget = NULL;
+	}
+
+
+	//
+	if ( desktop->dragTarget != NULL )
+	{
+		// Drag pressed window
+		desktop_dragWindow( desktop );
+	}
+
+
+	// Update screen to reflect changes
+	desktop_paint( desktop );
+
+	// Save state
+	desktop->prevLeftBtnState = leftBtnState;
 }
 
 
@@ -335,19 +574,22 @@ void desktop_paint ( struct _Desktop* desktop )
 void tut_init ( void )
 {
 	gContext = context_new( SCREEN_WIDTH, SCREEN_HEIGHT );
+
+	gDesktop = desktop_new( gContext );
+
+	desktop_createWindow( gDesktop,  10,  10, 300, 200, 0xFF0000FF );
+	desktop_createWindow( gDesktop, 100, 150, 400, 400, 0x00FF00FF );
+	desktop_createWindow( gDesktop, 200, 100, 200, 400, 0x0000FFFF );
+
+	desktop_paint( gDesktop );
 }
 
 void tut_main ( void )
 {
-	struct _Desktop* desktop;
+	// Poll mouse status...
+	desktop_processMouse( gDesktop, gMouseX, gMouseY, gLeftBtnState );
 
-	desktop = desktop_new( gContext );
-
-	desktop_createWindow( desktop,  10,  10, 300, 200, 0xFF0000FF );
-	desktop_createWindow( desktop, 100, 150, 400, 400, 0x00FF00FF );
-	desktop_createWindow( desktop, 200, 100, 200, 600, 0x0000FFFF );
-
-	desktop_paint( desktop );
+	//
 }
 
 
@@ -355,7 +597,7 @@ void tut_main ( void )
 
 
 
-void renderContextBuffer ( struct _Context* context )
+void olcGlue_renderContextBuffer ( struct _Context* context )
 {
 	unsigned int i;
 	unsigned int x;
@@ -389,6 +631,15 @@ void renderContextBuffer ( struct _Context* context )
 	}
 }
 
+void olcGlue_getMouseStatus ( void )
+{
+	gMouseX = PGE_getMouseX();
+	gMouseY = PGE_getMouseY();
+
+	gLeftBtnState = PGE_getMouse( MOUSE_LEFT ).bHeld;
+}
+
+
 
 
 
@@ -396,16 +647,16 @@ bool UI_onUserCreate ( void )
 {
 	tut_init();
 
-	tut_main();
-
 	return true;
 }
 
 bool UI_onUserUpdate ( void )
 {
-	// tut_main();
+	olcGlue_getMouseStatus();
 
-	renderContextBuffer( gContext );
+	tut_main();
+
+	olcGlue_renderContextBuffer( gContext );
 
 	return true;
 }

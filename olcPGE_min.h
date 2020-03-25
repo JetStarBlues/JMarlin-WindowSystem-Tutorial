@@ -104,7 +104,7 @@ enum rcode PGE_start     ( void );
 
 // User input
 HWButton PGE_getKey    ( enum Key k );
-HWButton PGE_getMouse  ( uint32_t b );
+HWButton PGE_getMouse  ( enum MouseButton b );
 int32_t  PGE_getMouseX ( void );
 int32_t  PGE_getMouseY ( void );
 // bool     PGE_isFocused ( void );

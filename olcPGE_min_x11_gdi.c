@@ -298,7 +298,7 @@ bool PGE_isFocused ( void )
 
 //================================================================================
 
-HWButton PGE_getMouse ( uint32_t b )
+HWButton PGE_getMouse ( enum MouseButton b )
 {
 	return pMouseState[ b ];
 }

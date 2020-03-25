@@ -3,6 +3,7 @@ struct _List {
 
 	unsigned int      nItems;
 	struct _ListNode* rootNode;
+	struct _ListNode* tailNode;
 };
 
 struct _ListNode
@@ -28,16 +29,26 @@ struct _Window {
 	uint16_t y;
 	uint16_t width;
 	uint16_t height;
+	uint32_t color;
 
 	struct _Context* context;
 
-	uint32_t color;  // temp
 };
 
 struct _Desktop {
 
-	struct _List*    children;
 	struct _Context* context;
+	struct _List*    children;
+
+	// mouse
+	uint8_t  prevLeftBtnState;
+	uint16_t mouseX;
+	uint16_t mouseY;
+
+	// drag
+	struct _Window* dragTarget;
+	uint16_t        dragOffsetX;
+	uint16_t        dragOffsetY;
 };
 
 
