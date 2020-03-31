@@ -9,6 +9,9 @@
 #include "tut.h"
 
 
+#define DEBUG_ADD_CLIP_RECT 1
+
+
 struct _Context* gContext;  // hmmm...
 struct _Desktop* gDesktop;  // hmmm...
 int16_t          gMouseX;
@@ -202,6 +205,301 @@ void* list_getNodeValue ( struct _List* list, unsigned int index )
 	return curNode->value;
 }
 
+void list_freeNodes ( struct _List* list )
+{
+	struct _ListNode* node;
+	struct _ListNode* curNode;
+
+	node = list->rootNode;
+
+	while ( node )
+	{
+		curNode = node;  // save
+
+		node = node->next;  // advance
+
+		free( curNode );
+
+		list->nItems -= 1;
+	}
+
+	list->rootNode = NULL;
+}
+
+
+
+
+
+
+struct _Rect* rect_new ( int top, int left, int bottom, int right )
+{
+	struct _Rect* rect;
+
+	rect = ( struct _Rect* ) malloc( sizeof( struct _Rect ) );
+
+	if ( rect == NULL )
+	{
+		return NULL;
+	}
+
+	rect->top    = top;
+	rect->left   = left;
+	rect->bottom = bottom;
+	rect->right  = right;
+
+	return rect;
+}
+
+/* Divide targetRect into a bunch of rects representing area visible
+   when occluded by cuttingRect.
+*/
+struct _List* rect_split ( struct _Rect* _targetRect, struct _Rect* cuttingRect )
+{
+	struct _List* outputRects;
+	struct _Rect  targetRect;
+	struct _Rect* rect;
+
+	//
+	outputRects = list_new();
+
+	if ( outputRects == NULL )
+	{
+		return NULL;
+	}
+
+
+	// Make a copy (so that don't modify original)
+	targetRect.top    = _targetRect->top;
+	targetRect.left   = _targetRect->left;
+	targetRect.bottom = _targetRect->bottom;
+	targetRect.right  = _targetRect->right;
+
+
+	// Split by left edge - - - - - - - - - - - - - - - - - - - - - - -
+
+	/*
+		          |                      
+		  OOOOOOOO|oooooooooooooooooooooo
+		  OOOOOOOO|oooooooooooooooooooooo
+		  OOOOOOOO|oooooooooooooooooooooo
+		  OOOOOOOO|@@@@@@@@@@@@@@oooooooo
+		  OOOOOOOO|@@@@@@@@@@@@@@oooooooo
+		  OOOOOOOO|@@@@@@@@@@@@@@oooooooo
+		  OOOOOOOO|@@@@@@@@@@@@@@oooooooo
+		  OOOOOOOO|@@@@@@@@@@@@@@oooooooo
+		  OOOOOOOO|@@@@@@@@@@@@@@oooooooo
+		  OOOOOOOO|oooooooooooooooooooooo
+		  OOOOOOOO|oooooooooooooooooooooo
+		  OOOOOOOO|oooooooooooooooooooooo
+		          |                      
+	*/
+
+	// If cuttingRect's left edge falls within targetRect
+	if (
+
+		( cuttingRect->left >= targetRect.left ) &&
+		( cuttingRect->left <= targetRect.right )
+	)
+	{
+		// Slice off portion of targetRect that falls to the left of the edge
+		rect = rect_new(
+
+			targetRect.top,
+			targetRect.left,
+			targetRect.bottom,
+			cuttingRect->left - 1  // why -1?
+		);
+
+		if ( rect == NULL )
+		{
+			free( outputRects );
+
+			return NULL;
+		}
+
+
+		// Add the new rectangle to the output list
+		list_appendNode( outputRects, rect );
+
+		// Shrink targetRect to exclude the sliced portion
+		targetRect.left = cuttingRect->left;
+	}
+
+
+	// Split by top edge - - - - - - - - - - - - - - - - - - - - - - -
+
+	/*
+		          OOOOOOOOOOOOOOOOOOOOOO
+		          OOOOOOOOOOOOOOOOOOOOOO
+		          OOOOOOOOOOOOOOOOOOOOOO
+		---------------------------------
+		          @@@@@@@@@@@@@@oooooooo
+		          @@@@@@@@@@@@@@oooooooo
+		          @@@@@@@@@@@@@@oooooooo
+		          @@@@@@@@@@@@@@oooooooo
+		          @@@@@@@@@@@@@@oooooooo
+		          @@@@@@@@@@@@@@oooooooo
+		          oooooooooooooooooooooo
+		          oooooooooooooooooooooo
+		          oooooooooooooooooooooo
+	*/
+
+	// If cuttingRect's top edge falls within targetRect
+	if (
+
+		( cuttingRect->top >= targetRect.top ) &&
+		( cuttingRect->top <= targetRect.bottom )
+	)
+	{
+		// Slice off portion of targetRect that falls to the top of the edge
+		rect = rect_new(
+
+			targetRect.top,
+			targetRect.left,
+			cuttingRect->top - 1,  // why -1?
+			targetRect.right
+		);
+
+		if ( rect == NULL )
+		{
+			list_freeNodes( outputRects );
+
+			free( outputRects );
+
+			return NULL;
+		}
+
+
+		// Add the new rectangle to the output list
+		list_appendNode( outputRects, rect );
+
+		// Shrink targetRect to exclude the sliced portion
+		targetRect.top = cuttingRect->top;
+	}
+
+
+	// Split by right edge - - - - - - - - - - - - - - - - - - - - - - -
+
+	/*
+	                            |        
+		                        |        
+		                        |        
+		                        |        
+		          @@@@@@@@@@@@@@|OOOOOOOO
+		          @@@@@@@@@@@@@@|OOOOOOOO
+		          @@@@@@@@@@@@@@|OOOOOOOO
+		          @@@@@@@@@@@@@@|OOOOOOOO
+		          @@@@@@@@@@@@@@|OOOOOOOO
+		          @@@@@@@@@@@@@@|OOOOOOOO
+		          oooooooooooooo|OOOOOOOO
+		          oooooooooooooo|OOOOOOOO
+		          oooooooooooooo|OOOOOOOO
+	                            |        
+	*/
+
+	// If cuttingRect's right edge falls within targetRect
+	if (
+
+		( cuttingRect->right >= targetRect.left ) &&
+		( cuttingRect->right <= targetRect.right )
+	)
+	{
+		// Slice off portion of targetRect that falls to the right of the edge
+		rect = rect_new(
+
+			targetRect.top,
+			cuttingRect->right + 1,  // why +1?
+			targetRect.bottom,
+			targetRect.right
+		);
+
+		if ( rect == NULL )
+		{
+			list_freeNodes( outputRects );
+
+			free( outputRects );
+
+			return NULL;
+		}
+
+
+		// Add the new rectangle to the output list
+		list_appendNode( outputRects, rect );
+
+		// Shrink targetRect to exclude the sliced portion
+		targetRect.right = cuttingRect->right;
+	}
+
+
+	// Split by bottom edge - - - - - - - - - - - - - - - - - - - - - - -
+
+	/*
+		                                
+		                                
+		                                
+		          @@@@@@@@@@@@@@        
+		          @@@@@@@@@@@@@@        
+		          @@@@@@@@@@@@@@        
+		          @@@@@@@@@@@@@@        
+		          @@@@@@@@@@@@@@        
+		          @@@@@@@@@@@@@@        
+		---------------------------------
+		          OOOOOOOOOOOOOO        
+		          OOOOOOOOOOOOOO        
+		          OOOOOOOOOOOOOO        
+	*/
+
+	// If cuttingRect's bottom edge falls within targetRect
+	if (
+
+		( cuttingRect->bottom >= targetRect.top ) &&
+		( cuttingRect->bottom <= targetRect.bottom )
+	)
+	{
+		// Slice off portion of targetRect that falls to the bottom of the edge
+		rect = rect_new(
+
+			cuttingRect->bottom + 1,  // why +1?
+			targetRect.left,
+			targetRect.bottom,
+			targetRect.right
+		);
+
+		if ( rect == NULL )
+		{
+			list_freeNodes( outputRects );
+
+			free( outputRects );
+
+			return NULL;
+		}
+
+
+		// Add the new rectangle to the output list
+		list_appendNode( outputRects, rect );
+
+		// Shrink targetRect to exclude the sliced portion
+		targetRect.bottom = cuttingRect->bottom;
+	}
+
+
+	// Done - - - - - - - - - - - - - - - - - - - - - - - - - -
+	return outputRects;
+}
+
+int rect_rectsIntersect ( struct _Rect* rectA, struct _Rect* rectB )
+{
+	return (
+
+		( rectA->left   <= rectB->right  ) &&
+		( rectA->right  >= rectB->left   ) &&
+		( rectA->top    <= rectB->bottom ) &&
+		( rectA->bottom >= rectB->top    )
+	);
+}
+
+
+
 
 
 
@@ -224,9 +522,230 @@ struct _Context* context_new ( unsigned int width, unsigned int height )
 
 	context->frameBuffer = ( uint32_t* ) malloc( sizeof( uint32_t ) * context->nPixels );
 
+	context->clipRects = list_new();
+
+	if ( ( context->frameBuffer == NULL ) || ( context->clipRects == NULL ) )
+	{
+		free( context );
+
+		return NULL;
+	}
+
 	return context;
 }
 
+// void context_addClipRect ( struct _Context* context, struct _Rect* newRect )
+void context_addClipRect ( struct _Context* context, struct _Rect* newRect, uint32_t debugColor )
+{
+	struct _Rect*     rect;
+	struct _List*     visibleSlices;
+	struct _ListNode* node;
+	struct _ListNode* node2;
+	int               i;
+
+
+	/* Check each item in the list to see if it is occluded
+	   by the new rect
+	*/
+	i    = 0;
+	node = context->clipRects->rootNode;
+
+	while ( node != NULL )
+	{
+		rect = ( struct _Rect* ) node->value;
+
+
+		// If the rects don't overlap, evaluate next
+		if ( rect_rectsIntersect( rect, newRect ) == 0 )
+		{
+			node  = node->next;
+			i    += 1;
+
+			continue;
+		}
+
+
+		/* If the existing rect is occluded by the new rect,
+		   replace it with slices that correspond to its visible part
+		*/
+		visibleSlices = rect_split( rect, newRect );
+
+		free( rect );
+
+
+		// Remove existing rect from the list
+		node = node->next;  /* retrive next node pointer before we delete current node.
+		                       Since deleting a node, no need to increment 'i' */
+
+		list_removeNode( context->clipRects, i );
+
+
+		// And replace it with its visible slices
+		node2 = visibleSlices->rootNode;
+
+		while ( node2 != NULL )
+		{
+			rect = ( struct _Rect* ) node2->value;
+
+			list_appendNode( context->clipRects, rect );
+
+			if ( DEBUG_ADD_CLIP_RECT )
+			{
+				context_strokeRect(
+
+					context,
+					rect->left,
+					rect->top,
+					rect->right - rect->left + 1,
+					rect->bottom - rect->top + 1,
+					debugColor,
+					1
+				);
+			}
+
+			node2 = node2->next;
+		}
+
+		list_freeNodes( visibleSlices );
+
+		free( visibleSlices );
+
+
+		/* Since we removed an item from the list,
+		   easier to just start iterating from the beginning
+		   (and skip non-overlapping), than to recalculate indices...
+		*/
+		// node = context->clipRects->rootNode;
+		// i    = 0;
+	}
+
+
+	/* At this point we have ensured that none of the exisitng rectangles
+	   overlap with the new one. As such, it can finally be added to the list
+	*/
+	list_appendNode( context->clipRects, newRect );
+
+	if ( DEBUG_ADD_CLIP_RECT )
+	{
+		context_strokeRect(
+
+			context,
+			newRect->left,
+			newRect->top,
+			newRect->right - newRect->left + 1,
+			newRect->bottom - newRect->top + 1,
+			debugColor,
+			1
+		);
+	}
+}
+
+void context_clearClipRects ( struct _Context* context )
+{
+	struct _ListNode* node;
+	struct _Rect*     rect;
+
+	// Free rects
+	node = context->clipRects->rootNode;
+
+	while ( node != NULL )
+	{
+		rect = ( struct _Rect* ) node->value;
+
+		free( rect );
+
+		node = node->next;
+	}
+
+
+	// Free list nodes
+	list_freeNodes( context->clipRects );
+}
+
+
+void context_lineHorizontal (
+
+	struct _Context* context,
+	int              x,
+	int              y,
+	unsigned int     width,
+	uint32_t         color,
+	unsigned int     strokeWeight
+)
+{
+	context_fillRect( context, x, y, width, strokeWeight, color );
+}
+
+void context_lineVertical (
+
+	struct _Context* context,
+	int              x,
+	int              y,
+	unsigned int     height,
+	uint32_t         color,
+	unsigned int     strokeWeight
+)
+{
+	context_fillRect( context, x, y, strokeWeight, height, color );
+}
+
+void context_strokeRect (
+
+	struct _Context* context,
+	int              x,
+	int              y,
+	unsigned int     width,
+	unsigned int     height,
+	uint32_t         color,
+	unsigned int     strokeWeight
+)
+{
+	/* Assumes border size is included in width.
+	   Similar to CSS "box-sizing" property. Eg:
+
+	       TTTR
+	       L..R  where width x height specified as 4x4
+	       L..R
+	       LBBB
+	*/
+
+	context_lineHorizontal(  // top
+
+		context,
+		x,
+		y,
+		width - strokeWeight,
+		color,
+		strokeWeight
+	);
+	context_lineVertical(  // right
+
+		context,
+		x + width - strokeWeight,
+		y,
+		height - strokeWeight,
+		color,
+		strokeWeight
+	);
+	context_lineHorizontal(  // bottom
+
+		context,
+		x + strokeWeight,
+		y + height - strokeWeight,
+		width - strokeWeight,
+		color,
+		strokeWeight
+	);
+	context_lineVertical(  // left
+
+		context,
+		x,
+		y + strokeWeight,
+		height - strokeWeight,
+		color,
+		strokeWeight
+	);
+}
 
 void context_fillRect (
 
@@ -308,6 +827,7 @@ void context_setPixel (
 
 	context->frameBuffer[ idx ] = color;
 }
+
 
 
 
@@ -440,7 +960,12 @@ struct _Window* desktop_createWindow (
 
 void desktop_paint ( struct _Desktop* desktop )
 {
-	struct _ListNode* child;
+	struct _ListNode* node;
+	struct _Window*   window;
+
+	struct _Rect* rect;
+	// struct _List* outputRects;
+
 
 	// Clear desktop
 	context_fillRect(
@@ -455,15 +980,69 @@ void desktop_paint ( struct _Desktop* desktop )
 	);
 
 
-	// Draw windows
-	child = desktop->children->rootNode;
+	// ?
+	context_clearClipRects( desktop->context );
 
-	while ( child != NULL )
+
+	// Create clipped rects for each window
+	node = desktop->children->rootNode;
+
+	while ( node != NULL )
 	{
-		window_paint( ( struct _Window* ) child->value );
+		window = ( struct _Window* ) node->value;
 
-		child = child->next;
+
+		//
+		rect = rect_new(
+
+			window->y,
+			window->x,
+			window->y + window->height - 1,  // why -1?
+			window->x + window->width - 1  // why -1?
+		);
+
+		// context_addClipRect( desktop->context, rect );
+		context_addClipRect( desktop->context, rect, window->color );
+
+
+		//
+		node = node->next;
 	}
+
+
+	// Debug - draw the final clipped rects
+	/*node = desktop->context->clipRects->rootNode;
+
+	while ( node != NULL )
+	{
+		rect = ( struct _Rect* ) node->value;
+
+		context_strokeRect(
+
+			desktop->context,
+			rect->left,
+			rect->top,
+			rect->right - rect->left + 1,
+			rect->bottom - rect->top + 1,
+			0xFFFF00FF,
+			1
+		);
+
+		node = node->next;
+	}*/
+
+
+	// Draw the windows
+	/*node = desktop->children->rootNode;
+
+	while ( node != NULL )
+	{
+		window = ( struct _Window* ) node->value;
+
+		window_paint( window );
+
+		node = node->next;
+	}*/
 
 
 	// Draw mouse
@@ -682,6 +1261,7 @@ bool UI_onUserUpdate ( void )
 
 	olcGlue_renderContextBuffer( gContext );
 
+	// return false;
 	return true;
 }
 
