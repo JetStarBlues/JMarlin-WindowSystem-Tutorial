@@ -117,11 +117,11 @@ int list_appendNode ( struct _List* list, void* value )
 	return 1;
 }
 
-void* list_removeNode ( struct _List* list, unsigned int index )
+void* list_removeNode ( struct _List* list, int index )
 {
 	struct _ListNode* curNode;
 	void*             value;
-	unsigned int      i;
+	int               i;
 
 	// Early exit
 	if ( ( list->nItems == 0 ) || ( index >= list->nItems ) )
@@ -179,10 +179,10 @@ void* list_removeNode ( struct _List* list, unsigned int index )
 	return value;
 }
 
-void* list_getNodeValue ( struct _List* list, unsigned int index )
+void* list_getNodeValue ( struct _List* list, int index )
 {
 	struct _ListNode* curNode;
-	unsigned int      i;
+	int               i;
 
 	// Early exit
 	if ( ( list->nItems == 0 ) || ( index >= list->nItems ) )
@@ -505,7 +505,7 @@ int rect_rectsIntersect ( struct _Rect* rectA, struct _Rect* rectB )
 
 
 
-struct _Context* context_new ( unsigned int width, unsigned int height )
+struct _Context* context_new ( int width, int height )
 {
 	struct _Context* context;
 
@@ -668,9 +668,9 @@ void context_lineHorizontal (
 	struct _Context* context,
 	int              x,
 	int              y,
-	unsigned int     width,
+	int              width,
 	uint32_t         color,
-	unsigned int     strokeWeight
+	int              strokeWeight
 )
 {
 	context_fillRect( context, x, y, width, strokeWeight, color );
@@ -681,9 +681,9 @@ void context_lineVertical (
 	struct _Context* context,
 	int              x,
 	int              y,
-	unsigned int     height,
+	int              height,
 	uint32_t         color,
-	unsigned int     strokeWeight
+	int              strokeWeight
 )
 {
 	context_fillRect( context, x, y, strokeWeight, height, color );
@@ -694,10 +694,10 @@ void context_strokeRect (
 	struct _Context* context,
 	int              x,
 	int              y,
-	unsigned int     width,
-	unsigned int     height,
+	int              width,
+	int              height,
 	uint32_t         color,
-	unsigned int     strokeWeight
+	int              strokeWeight
 )
 {
 	/* Assumes border size is included in width.
@@ -752,15 +752,15 @@ void context_fillRect (
 	struct _Context* context,
 	int              x,
 	int              y,
-	unsigned int     width,
-	unsigned int     height,
+	int              width,
+	int              height,
 	uint32_t         color
 )
 {
-	unsigned int curX;
-	unsigned int maxX;
-	unsigned int maxY;
-	unsigned int idx;
+	int curX;
+	int maxX;
+	int maxY;
+	int idx;
 
 	maxX = x + width;
 	maxY = y + height;
@@ -776,7 +776,7 @@ void context_fillRect (
 		maxY = context->height;
 	}
 
-	if ( x < 0 )  // JK...
+	if ( x < 0 )
 	{
 		x = 0;
 	}
@@ -809,7 +809,7 @@ void context_setPixel (
 	uint32_t         color
 )
 {
-	unsigned int idx;
+	int idx;
 
 	// Check bounds
 	if (
@@ -838,8 +838,8 @@ struct _Window* window_new (
 
 	int              x,
 	int              y,
-	unsigned int     width,
-	unsigned int     height,
+	int              width,
+	int              height,
 	uint32_t         color,
 	struct _Context* context
 )
@@ -929,8 +929,8 @@ struct _Window* desktop_createWindow (
 	struct _Desktop* desktop,
 	int              x,
 	int              y,
-	unsigned int     width,
-	unsigned int     height,
+	int              width,
+	int              height,
 	uint32_t         color
 )
 {
@@ -1053,8 +1053,8 @@ void desktop_raiseWindow ( struct _Desktop* desktop )
 {
 	struct _ListNode* child;
 	struct _Window*   window;
-	unsigned int      nChildren;
-	unsigned int      i;
+	int               nChildren;
+	int               i;
 
 	nChildren = desktop->children->nItems;
 
@@ -1202,9 +1202,9 @@ void tut_main ( void )
 
 void olcGlue_renderContextBuffer ( struct _Context* context )
 {
-	unsigned int i;
-	unsigned int x;
-	unsigned int y;
+	int          i;
+	int          x;
+	int          y;
 	uint32_t     color;
 	uint8_t      r;
 	uint8_t      g;

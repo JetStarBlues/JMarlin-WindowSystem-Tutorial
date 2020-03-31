@@ -1,7 +1,7 @@
 
 struct _List {
 
-	unsigned int      nItems;
+	int               nItems;
 	struct _ListNode* rootNode;
 	struct _ListNode* tailNode;
 };
@@ -17,10 +17,10 @@ struct _ListNode
 
 struct _Context {
 
-	uint32_t*    frameBuffer;
-	unsigned int width;
-	unsigned int height;
-	unsigned int nPixels;
+	uint32_t* frameBuffer;
+	int       width;
+	int       height;
+	int       nPixels;
 
 	struct _List* clipRects;
 };
@@ -73,15 +73,15 @@ struct _Desktop {
 struct _ListNode* listNode_new      ( void* value );
 struct _List*     list_new          ( void );
 int               list_appendNode   ( struct _List* list, void* value );
-void*             list_removeNode   ( struct _List* list, unsigned int index );
-void*             list_getNodeValue ( struct _List* list, unsigned int index );
+void*             list_removeNode   ( struct _List* list, int index );
+void*             list_getNodeValue ( struct _List* list, int index );
 void              list_freeNodes    ( struct _List* list );
 
 struct _Rect* rect_new            ( int top, int left, int bottom, int right );
 struct _List* rect_split          ( struct _Rect* _targetRect, struct _Rect* cuttingRect );
 int           rect_rectsIntersect ( struct _Rect* rectA, struct _Rect* rectB );
 
-struct _Context* context_new            ( unsigned int width, unsigned int height );
+struct _Context* context_new            ( int width, int height );
 void             context_addClipRect    ( struct _Context* context, struct _Rect* newRect, uint32_t debugColor );
 void             context_clearClipRects ( struct _Context* context );
 void context_lineHorizontal (
@@ -89,36 +89,36 @@ void context_lineHorizontal (
 	struct _Context* context,
 	int              x,
 	int              y,
-	unsigned int     width,
+	int              width,
 	uint32_t         color,
-	unsigned int     strokeWeight
+	int              strokeWeight
 );
 void context_lineVertical (
 
 	struct _Context* context,
 	int              x,
 	int              y,
-	unsigned int     height,
+	int              height,
 	uint32_t         color,
-	unsigned int     strokeWeight
+	int              strokeWeight
 );
 void context_strokeRect (
 
 	struct _Context* context,
 	int              x,
 	int              y,
-	unsigned int     width,
-	unsigned int     height,
+	int              width,
+	int              height,
 	uint32_t         color,
-	unsigned int     strokeWeight
+	int              strokeWeight
 );
 void context_fillRect (
 
 	struct _Context* context,
 	int              x,
 	int              y,
-	unsigned int     width,
-	unsigned int     height,
+	int              width,
+	int              height,
 	uint32_t         color
 );
 void context_setPixel (
@@ -133,8 +133,8 @@ struct _Window* window_new (
 
 	int              x,
 	int              y,
-	unsigned int     width,
-	unsigned int     height,
+	int              width,
+	int              height,
 	uint32_t         color,
 	struct _Context* context
 );
@@ -148,8 +148,8 @@ struct _Window* desktop_createWindow (
 	struct _Desktop* desktop,
 	int              x,
 	int              y,
-	unsigned int     width,
-	unsigned int     height,
+	int              width,
+	int              height,
 	uint32_t         color
 );
 void desktop_paint       ( struct _Desktop* desktop );
