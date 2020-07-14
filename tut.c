@@ -9,7 +9,8 @@
 #include "tut.h"
 
 
-#define DEBUG_ADD_CLIP_RECT 1
+#define DEBUG_ADD_CLIP_RECT_1 1
+#define DEBUG_ADD_CLIP_RECT_2 0
 
 
 struct _Context* gContext;  // hmmm...
@@ -21,6 +22,9 @@ uint8_t          gLeftBtnState;
 
 
 
+/* ==========================================================================================
+   ...
+   ========================================================================================== */
 
 struct _ListNode* listNode_new ( void* value )
 {
@@ -229,7 +233,9 @@ void list_freeNodes ( struct _List* list )
 
 
 
-
+/* ==========================================================================================
+   ...
+   ========================================================================================== */
 
 struct _Rect* rect_new ( int top, int left, int bottom, int right )
 {
@@ -249,6 +255,9 @@ struct _Rect* rect_new ( int top, int left, int bottom, int right )
 
 	return rect;
 }
+
+
+// ------------------------------------------------------------------------------------------
 
 /* Divide targetRect into a bunch of rects representing area visible
    when occluded by cuttingRect.
@@ -501,9 +510,9 @@ int rect_rectsIntersect ( struct _Rect* rectA, struct _Rect* rectB )
 
 
 
-
-
-
+/* ==========================================================================================
+   ...
+   ========================================================================================== */
 
 struct _Context* context_new ( int width, int height )
 {
@@ -533,6 +542,9 @@ struct _Context* context_new ( int width, int height )
 
 	return context;
 }
+
+
+// ------------------------------------------------------------------------------------------
 
 // void context_addClipRect ( struct _Context* context, struct _Rect* newRect )
 void context_addClipRect ( struct _Context* context, struct _Rect* newRect, uint32_t debugColor )
@@ -589,7 +601,8 @@ void context_addClipRect ( struct _Context* context, struct _Rect* newRect, uint
 
 			list_appendNode( context->clipRects, rect );
 
-			if ( DEBUG_ADD_CLIP_RECT )
+			// Debug - draw the intermediate clipped rects
+			if ( DEBUG_ADD_CLIP_RECT_1 )
 			{
 				context_strokeRect(
 
@@ -609,14 +622,6 @@ void context_addClipRect ( struct _Context* context, struct _Rect* newRect, uint
 		list_freeNodes( visibleSlices );
 
 		free( visibleSlices );
-
-
-		/* Since we removed an item from the list,
-		   easier to just start iterating from the beginning
-		   (and skip non-overlapping), than to recalculate indices...
-		*/
-		// node = context->clipRects->rootNode;
-		// i    = 0;
 	}
 
 
@@ -625,7 +630,8 @@ void context_addClipRect ( struct _Context* context, struct _Rect* newRect, uint
 	*/
 	list_appendNode( context->clipRects, newRect );
 
-	if ( DEBUG_ADD_CLIP_RECT )
+	// Debug - draw the intermediate clipped rects
+	if ( DEBUG_ADD_CLIP_RECT_1 )
 	{
 		context_strokeRect(
 
@@ -662,6 +668,8 @@ void context_clearClipRects ( struct _Context* context )
 	list_freeNodes( context->clipRects );
 }
 
+
+// ------------------------------------------------------------------------------------------
 
 void context_lineHorizontal (
 
@@ -831,8 +839,9 @@ void context_setPixel (
 
 
 
-
-
+/* ==========================================================================================
+   ...
+   ========================================================================================== */
 
 struct _Window* window_new (
 
@@ -879,7 +888,9 @@ void window_paint ( struct _Window* window )
 
 
 
-
+/* ==========================================================================================
+   ...
+   ========================================================================================== */
 
 void cursor_paint ( struct _Context* context, int x, int y )
 {
@@ -893,6 +904,9 @@ void cursor_paint ( struct _Context* context, int x, int y )
 
 
 
+/* ==========================================================================================
+   ...
+   ========================================================================================== */
 
 struct _Desktop* desktop_new ( struct _Context* context )
 {
@@ -1011,25 +1025,28 @@ void desktop_paint ( struct _Desktop* desktop )
 
 
 	// Debug - draw the final clipped rects
-	/*node = desktop->context->clipRects->rootNode;
-
-	while ( node != NULL )
+	if ( DEBUG_ADD_CLIP_RECT_2 )
 	{
-		rect = ( struct _Rect* ) node->value;
+		node = desktop->context->clipRects->rootNode;
 
-		context_strokeRect(
+		while ( node != NULL )
+		{
+			rect = ( struct _Rect* ) node->value;
 
-			desktop->context,
-			rect->left,
-			rect->top,
-			rect->right - rect->left + 1,
-			rect->bottom - rect->top + 1,
-			0xFFFF00FF,
-			1
-		);
+			context_strokeRect(
 
-		node = node->next;
-	}*/
+				desktop->context,
+				rect->left,
+				rect->top,
+				rect->right - rect->left + 1,
+				rect->bottom - rect->top + 1,
+				0xFFFF00FF,
+				1
+			);
+
+			node = node->next;
+		}
+	}
 
 
 	// Draw the windows
@@ -1167,12 +1184,9 @@ void desktop_processMouse (
 
 
 
-
-
-
-
-
-
+/* ==========================================================================================
+   ...
+   ========================================================================================== */
 
 void tut_init ( void )
 {
@@ -1199,6 +1213,9 @@ void tut_main ( void )
 
 
 
+/* =~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~
+   olcPixelGameEngine
+   =~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~ */
 
 void olcGlue_renderContextBuffer ( struct _Context* context )
 {
@@ -1243,8 +1260,7 @@ void olcGlue_getMouseStatus ( void )
 }
 
 
-
-
+// ------------------------------------------------------------------------------------------
 
 bool UI_onUserCreate ( void )
 {
