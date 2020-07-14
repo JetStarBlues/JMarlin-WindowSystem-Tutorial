@@ -90,9 +90,10 @@ struct _Rect* rect_new            ( int top, int left, int bottom, int right );
 struct _List* rect_split          ( struct _Rect* _targetRect, struct _Rect* cuttingRect );
 int           rect_rectsIntersect ( struct _Rect* rectA, struct _Rect* rectB );
 
-struct _Context* context_new            ( int width, int height );
-void             context_addClipRect    ( struct _Context* context, struct _Rect* newRect, uint32_t debugColor );
-void             context_clearClipRects ( struct _Context* context );
+struct _Context* context_new              ( int width, int height );
+void             context_subtractClipRect ( struct _Context* context, struct _Rect* newRect, uint32_t debugColor );
+void             context_addClipRect      ( struct _Context* context, struct _Rect* newRect, uint32_t debugColor );
+void             context_clearClipRects   ( struct _Context* context );
 void context_lineHorizontal (
 
 	struct _Context* context,

@@ -9,8 +9,8 @@
 #include "tut.h"
 
 
-#define DEBUG_ADD_CLIP_RECT_1 1
-#define DEBUG_ADD_CLIP_RECT_2 0
+#define DEBUG_ADD_CLIP_RECT_1 0
+#define DEBUG_ADD_CLIP_RECT_2 1
 
 
 struct _Context* gContext;  // hmmm...
@@ -546,8 +546,8 @@ struct _Context* context_new ( int width, int height )
 
 // ------------------------------------------------------------------------------------------
 
-// void context_addClipRect ( struct _Context* context, struct _Rect* newRect )
-void context_addClipRect ( struct _Context* context, struct _Rect* newRect, uint32_t debugColor )
+// void context_subtractClipRect ( struct _Context* context, struct _Rect* newRect )
+void context_subtractClipRect ( struct _Context* context, struct _Rect* newRect, uint32_t debugColor )
 {
 	struct _Rect*     rect;
 	struct _List*     visibleSlices;
@@ -578,7 +578,8 @@ void context_addClipRect ( struct _Context* context, struct _Rect* newRect, uint
 
 
 		/* If the existing rect is occluded by the new rect,
-		   replace it with slices that correspond to its visible part
+		   replace the existing rect with slices that correspond
+		   to its visible part
 		*/
 		visibleSlices = rect_split( rect, newRect );
 
@@ -623,7 +624,14 @@ void context_addClipRect ( struct _Context* context, struct _Rect* newRect, uint
 
 		free( visibleSlices );
 	}
+}
 
+void context_addClipRect ( struct _Context* context, struct _Rect* newRect, uint32_t debugColor )
+{
+	/* If the existing rectangles are occluded by the new rect,
+	   replace them with slices that correspond to their visible parts
+	*/
+	context_subtractClipRect( context, newRect, debugColor );
 
 	/* At this point we have ensured that none of the exisitng rectangles
 	   overlap with the new one. As such, it can finally be added to the list
@@ -643,7 +651,7 @@ void context_addClipRect ( struct _Context* context, struct _Rect* newRect, uint
 			debugColor,
 			1
 		);
-	}
+	}	
 }
 
 void context_clearClipRects ( struct _Context* context )
@@ -755,13 +763,15 @@ void context_strokeRect (
 	);
 }
 
-void context_fillRect (
+// Draw only the portion of the rect that is within 'boundary'
+void context__boundedFillRect (
 
 	struct _Context* context,
 	int              x,
 	int              y,
 	int              width,
 	int              height,
+	struct _Rect*    boundary,
 	uint32_t         color
 )
 {
@@ -773,7 +783,7 @@ void context_fillRect (
 	maxX = x + width;
 	maxY = y + height;
 
-	// Check bounds
+	// Constrain to bounds of context (screen)
 	if ( maxX > context->width )
 	{
 		maxX = context->width;
@@ -794,6 +804,30 @@ void context_fillRect (
 		y = 0;
 	}
 
+	// Constrain to bounds of clipRect
+	if ( boundary != NULL )
+	{
+		if ( maxX > ( boundary->right + 1 ) )
+		{
+			maxX = boundary->right + 1;
+		}
+
+		if ( maxY > boundary->bottom + 1 )
+		{
+			maxY = boundary->bottom + 1;
+		}
+
+		if ( x < boundary->left )
+		{
+			x = boundary->left;
+		}
+
+		if ( y < boundary->top )
+		{
+			y = boundary->top;
+		}
+	}
+
 
 	// Draw the rectangle
 	while ( y < maxY )
@@ -809,6 +843,46 @@ void context_fillRect (
 	}
 }
 
+/* Since all our drawing primitives ultimately call this function,
+   they end up being appropriately clipped
+*/
+void context_fillRect (
+
+	struct _Context* context,
+	int              x,
+	int              y,
+	int              width,
+	int              height,
+	uint32_t         color
+)
+{
+	struct _ListNode* node;
+	struct _Rect*     clipRect;
+
+	// If there are clipping rects, draw the rect clipped to each? of them
+	if ( context->clipRects->nItems > 0 )
+	{
+		node = context->clipRects->rootNode;
+
+		while ( node != NULL )
+		{
+			clipRect = ( struct _Rect* ) node->value;
+
+			context__boundedFillRect( context, x, y, width, height, clipRect, color );
+
+			node = node->next;
+		}
+	}
+
+	// Otherwise, draw the rect unclipped (clipped to the screen)
+	else
+	{
+		context__boundedFillRect( context, x, y, width, height, NULL, color );
+	}
+}
+
+/* TODO: Does not clip
+*/
 void context_setPixel (
 
 	struct _Context* context,
@@ -819,7 +893,7 @@ void context_setPixel (
 {
 	int idx;
 
-	// Check bounds
+	// Check bounds of context (screen)
 	if (
 
 		( x < 0 )                ||
@@ -895,10 +969,10 @@ void window_paint ( struct _Window* window )
 void cursor_paint ( struct _Context* context, int x, int y )
 {
 	context_setPixel( context, x,     y,     0xFFFFFFFF );
-	context_setPixel( context, x - 1, y,     0x000000FF );
-	context_setPixel( context, x + 1, y,     0x000000FF );
-	context_setPixel( context, x,     y + 1, 0x000000FF );
-	context_setPixel( context, x,     y - 1, 0x000000FF );
+	context_setPixel( context, x - 1, y,     0xFF0000FF );
+	context_setPixel( context, x + 1, y,     0xFF0000FF );
+	context_setPixel( context, x,     y + 1, 0xFF0000FF );
+	context_setPixel( context, x,     y - 1, 0xFF0000FF );
 }
 
 
@@ -938,50 +1012,22 @@ struct _Desktop* desktop_new ( struct _Context* context )
 	return desktop;
 }
 
-struct _Window* desktop_createWindow (
 
-	struct _Desktop* desktop,
-	int              x,
-	int              y,
-	int              width,
-	int              height,
-	uint32_t         color
-)
-{
-	struct _Window* window;
-	int             rStatus;
-
-	window = window_new( x, y, width, height, color, desktop->context );
-
-	if ( window == NULL )
-	{
-		return NULL;
-	}
-
-
-	rStatus = list_appendNode( desktop->children, ( void* ) window );
-
-	if ( rStatus == 0 )
-	{
-		free( window );
-
-		return NULL;
-	}
-
-
-	return window;
-}
+// ------------------------------------------------------------------------------------------
 
 void desktop_paint ( struct _Desktop* desktop )
 {
 	struct _ListNode* node;
 	struct _Window*   window;
+	struct _Rect*     rect;
+	struct _Rect*     desktopRect;
 
-	struct _Rect* rect;
-	// struct _List* outputRects;
+
+	//
+	context_clearClipRects( desktop->context );
 
 
-	// Clear desktop
+	// Clear desktop (without clipping)
 	context_fillRect(
 
 		desktop->context,
@@ -994,11 +1040,24 @@ void desktop_paint ( struct _Desktop* desktop )
 	);
 
 
-	// ?
-	context_clearClipRects( desktop->context );
+	// Add a clipping rect that represents the desktop
+	desktopRect = rect_new(
+
+		0,
+		0,
+		desktop->context->height - 1,
+		desktop->context->width - 1
+	);
+
+	if ( desktopRect == NULL )
+	{
+		return;
+	}
+
+	context_addClipRect( desktop->context, desktopRect, 0xFFFFFFFF );
 
 
-	// Create clipped rects for each window
+	// Subtract each of the window rects from the desktop
 	node = desktop->children->rootNode;
 
 	while ( node != NULL )
@@ -1016,12 +1075,33 @@ void desktop_paint ( struct _Desktop* desktop )
 		);
 
 		// context_addClipRect( desktop->context, rect );
-		context_addClipRect( desktop->context, rect, window->color );
+		// context_addClipRect( desktop->context, rect, window->color );
+		context_subtractClipRect( desktop->context, rect, window->color );
+
+		/* In 'context_addClipRect', the rect (representing the (topmost) window)
+		   gets added to 'context->clipRects'.
+		   Whereas in 'context_subtractClipRect', it is no longer used after the
+		   visible slices have been calculated.
+		*/
+		free( rect );
 
 
 		//
 		node = node->next;
 	}
+
+
+	// Clear desktop (with clipping)
+	context_fillRect(
+
+		desktop->context,
+		0,
+		0,
+		desktop->context->width,
+		desktop->context->height,
+		0x00303BFF
+		// 0x000000FF
+	);
 
 
 	// Debug - draw the final clipped rects
@@ -1065,6 +1145,44 @@ void desktop_paint ( struct _Desktop* desktop )
 	// Draw mouse
 	cursor_paint( desktop->context, desktop->mouseX, desktop->mouseY );
 }
+
+
+// ------------------------------------------------------------------------------------------
+
+struct _Window* desktop_createWindow (
+
+	struct _Desktop* desktop,
+	int              x,
+	int              y,
+	int              width,
+	int              height,
+	uint32_t         color
+)
+{
+	struct _Window* window;
+	int             rStatus;
+
+	window = window_new( x, y, width, height, color, desktop->context );
+
+	if ( window == NULL )
+	{
+		return NULL;
+	}
+
+
+	rStatus = list_appendNode( desktop->children, ( void* ) window );
+
+	if ( rStatus == 0 )
+	{
+		free( window );
+
+		return NULL;
+	}
+
+
+	return window;
+}
+
 
 void desktop_raiseWindow ( struct _Desktop* desktop )
 {
@@ -1135,6 +1253,9 @@ void desktop_dragWindow ( struct _Desktop* desktop )
 	desktop->dragTarget->x = desktop->mouseX - desktop->dragOffsetX;
 	desktop->dragTarget->y = desktop->mouseY - desktop->dragOffsetY;
 }
+
+
+// ------------------------------------------------------------------------------------------
 
 void desktop_processMouse (
 

@@ -1,4 +1,5 @@
 CFLAGS = -Werror -Wall -Wno-unused
+CFLAGS += -g  # add debug symbols
 LIBS   = -lX11 -lGL -lpthread
 
 SRC_FILES =               \
@@ -8,6 +9,9 @@ SRC_FILES =               \
 all:
 
 	gcc $(CFLAGS) $(SRC_FILES) $(LIBS) -o bin/main.e
+
+	objdump -S -M intel bin/main.e > bin/main.asm
+
 
 
 # TODO: run valgrind on all exe's to check no leaks
@@ -22,4 +26,4 @@ all:
 #	Windows (VS command prompt):
 #
 #		cd binWin
-#		cl ../$(SRC_FILES)
+#		cl ../$(SRC_FILES) /Fe"main.exe"
