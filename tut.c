@@ -9,8 +9,10 @@
 #include "tut.h"
 
 
-#define DEBUG_ADD_CLIP_RECT_1 0
-#define DEBUG_ADD_CLIP_RECT_2 1
+#define DEBUG_ADD_CLIP_RECT    0
+#define DEBUG_FINAL_CLIP_RECTS 0
+#define DEBUG_DESKTOP_CLIP     0
+#define DEBUG_WINDOW_CLIP      0
 
 
 struct _Context* gContext;  // hmmm...
@@ -259,6 +261,20 @@ struct _Rect* rect_new ( int top, int left, int bottom, int right )
 
 // ------------------------------------------------------------------------------------------
 
+int rect_rectsIntersect ( struct _Rect* rectA, struct _Rect* rectB )
+{
+	return (
+
+		( rectA->left   <= rectB->right  ) &&
+		( rectA->right  >= rectB->left   ) &&
+		( rectA->top    <= rectB->bottom ) &&
+		( rectA->bottom >= rectB->top    )
+	);
+}
+
+
+// ------------------------------------------------------------------------------------------
+
 /* Divide targetRect into a bunch of rects representing area visible
    when occluded by cuttingRect.
 */
@@ -496,17 +512,6 @@ struct _List* rect_split ( struct _Rect* _targetRect, struct _Rect* cuttingRect 
 	return outputRects;
 }
 
-int rect_rectsIntersect ( struct _Rect* rectA, struct _Rect* rectB )
-{
-	return (
-
-		( rectA->left   <= rectB->right  ) &&
-		( rectA->right  >= rectB->left   ) &&
-		( rectA->top    <= rectB->bottom ) &&
-		( rectA->bottom >= rectB->top    )
-	);
-}
-
 
 
 
@@ -603,7 +608,7 @@ void context_subtractClipRect ( struct _Context* context, struct _Rect* newRect,
 			list_appendNode( context->clipRects, rect );
 
 			// Debug - draw the intermediate clipped rects
-			if ( DEBUG_ADD_CLIP_RECT_1 )
+			if ( DEBUG_ADD_CLIP_RECT )
 			{
 				context_strokeRect(
 
@@ -639,7 +644,7 @@ void context_addClipRect ( struct _Context* context, struct _Rect* newRect, uint
 	list_appendNode( context->clipRects, newRect );
 
 	// Debug - draw the intermediate clipped rects
-	if ( DEBUG_ADD_CLIP_RECT_1 )
+	if ( DEBUG_ADD_CLIP_RECT )
 	{
 		context_strokeRect(
 
@@ -1018,128 +1023,226 @@ struct _Desktop* desktop_new ( struct _Context* context )
 void desktop_paint ( struct _Desktop* desktop )
 {
 	struct _ListNode* node;
+	struct _ListNode* node2;
+	struct _ListNode* node3;
 	struct _Window*   window;
+	struct _Window*   clipWindow;
 	struct _Rect*     rect;
+	struct _Rect      winRect;
+	struct _Rect*     windowRect;
 	struct _Rect*     desktopRect;
+	struct _List*     clipWindows;
 
-
-	//
-	context_clearClipRects( desktop->context );
-
-
-	// Clear desktop (without clipping)
-	context_fillRect(
-
-		desktop->context,
-		0,
-		0,
-		desktop->context->width,
-		desktop->context->height,
-		// 0xABCDEFFF
-		0x000000FF
-	);
-
-
-	// Add a clipping rect that represents the desktop
-	desktopRect = rect_new(
-
-		0,
-		0,
-		desktop->context->height - 1,
-		desktop->context->width - 1
-	);
-
-	if ( desktopRect == NULL )
+	/* Do the clipping for the desktop
+	*/
 	{
-		return;
-	}
-
-	context_addClipRect( desktop->context, desktopRect, 0xFFFFFFFF );
+		context_clearClipRects( desktop->context );
 
 
-	// Subtract each of the window rects from the desktop
-	node = desktop->children->rootNode;
+		// Debug - clear desktop (without clipping)
+		if ( DEBUG_DESKTOP_CLIP )
+		{
+			context_fillRect(
 
-	while ( node != NULL )
-	{
-		window = ( struct _Window* ) node->value;
+				desktop->context,
+				0,
+				0,
+				desktop->context->width,
+				desktop->context->height,
+				0x00303BFF
+				// 0x000000FF
+			);
+		}
 
 
-		//
-		rect = rect_new(
+		// Create and add a base rectangle for the desktop
+		desktopRect = rect_new(
 
-			window->y,
-			window->x,
-			window->y + window->height - 1,  // why -1?
-			window->x + window->width - 1  // why -1?
+			0,
+			0,
+			desktop->context->height - 1,
+			desktop->context->width - 1
 		);
 
-		// context_addClipRect( desktop->context, rect );
-		// context_addClipRect( desktop->context, rect, window->color );
-		context_subtractClipRect( desktop->context, rect, window->color );
+		if ( desktopRect == NULL )
+		{
+			return;
+		}
 
-		/* In 'context_addClipRect', the rect (representing the (topmost) window)
-		   gets added to 'context->clipRects'.
-		   Whereas in 'context_subtractClipRect', it is no longer used after the
-		   visible slices have been calculated.
-		*/
-		free( rect );
+		context_addClipRect( desktop->context, desktopRect, 0xFFFFFFFF );
 
 
-		//
-		node = node->next;
-	}
-
-
-	// Clear desktop (with clipping)
-	context_fillRect(
-
-		desktop->context,
-		0,
-		0,
-		desktop->context->width,
-		desktop->context->height,
-		0x00303BFF
-		// 0x000000FF
-	);
-
-
-	// Debug - draw the final clipped rects
-	if ( DEBUG_ADD_CLIP_RECT_2 )
-	{
-		node = desktop->context->clipRects->rootNode;
+		// Subtract each of the windows from the desktop
+		node = desktop->children->rootNode;
 
 		while ( node != NULL )
 		{
-			rect = ( struct _Rect* ) node->value;
+			window = ( struct _Window* ) node->value;
 
-			context_strokeRect(
+			//
+			winRect.top    = window->y;
+			winRect.left   = window->x;
+			winRect.bottom = window->y + window->height - 1;
+			winRect.right  = window->x + window->width - 1;
 
-				desktop->context,
-				rect->left,
-				rect->top,
-				rect->right - rect->left + 1,
-				rect->bottom - rect->top + 1,
-				0xFFFF00FF,
-				1
-			);
+			context_subtractClipRect( desktop->context, &winRect, window->color );
 
+			//
 			node = node->next;
+		}
+
+
+		// Clear desktop (with clipping)
+		context_fillRect(
+
+			desktop->context,
+			0,
+			0,
+			desktop->context->width,
+			desktop->context->height,
+			// 0x00303BFF
+			0x000000FF
+		);
+
+
+		// Debug - draw the final clipped rects
+		if ( DEBUG_DESKTOP_CLIP && DEBUG_FINAL_CLIP_RECTS )
+		{
+			node3 = desktop->context->clipRects->rootNode;
+
+			while ( node3 != NULL )
+			{
+				rect = ( struct _Rect* ) node3->value;
+
+				context_strokeRect(
+
+					desktop->context,
+					rect->left,
+					rect->top,
+					rect->right - rect->left + 1,
+					rect->bottom - rect->top + 1,
+					0xFFFF00FF,
+					1
+				);
+
+				node3 = node3->next;
+			}
 		}
 	}
 
 
-	// Draw the windows
-	/*node = desktop->children->rootNode;
-
-	while ( node != NULL )
+	/* Do the clipping for each window
+	*/
 	{
-		window = ( struct _Window* ) node->value;
+		context_clearClipRects( desktop->context );
 
-		window_paint( window );
 
-		node = node->next;
-	}*/
+		//
+		node = desktop->children->rootNode;
+
+		while ( node != NULL )
+		{
+			window = ( struct _Window* ) node->value;
+
+
+			// Debug - draw the window (without clipping)
+			if ( DEBUG_WINDOW_CLIP )
+			{
+				context_fillRect(
+
+					window->context,
+					window->x,
+					window->y,
+					window->width,
+					window->height,
+					// window->color
+					0xFFCE96FF
+				);
+			}
+
+
+			// Create and add a base rectangle for the current window
+			windowRect = rect_new(
+
+				window->y,
+				window->x,
+				window->y + window->height - 1,
+				window->x + window->width - 1
+			);
+
+			if ( windowRect == NULL )
+			{
+				return;
+			}
+
+			context_addClipRect( desktop->context, windowRect, window->color );
+
+
+			// Get windows above and overlapping
+			clipWindows = desktop_getWindowsAbove( desktop, window );
+
+
+			// Subtract each of the clipWindows from the window
+			node2 = clipWindows->rootNode;
+
+			while ( node2 != NULL )
+			{
+				clipWindow = ( struct _Window* ) node2->value;
+
+				//
+				winRect.top    = clipWindow->y;
+				winRect.left   = clipWindow->x;
+				winRect.bottom = clipWindow->y + clipWindow->height - 1;
+				winRect.right  = clipWindow->x + clipWindow->width - 1;
+
+				context_subtractClipRect( desktop->context, &winRect, clipWindow->color );
+
+				//
+				node2 = node2->next;
+			}
+
+
+			//
+			list_freeNodes( clipWindows );
+			free( clipWindows );
+
+
+			// Draw the window (with clipping)
+			window_paint( window );
+
+
+			// Debug - draw the final clipped rects
+			if ( DEBUG_WINDOW_CLIP && DEBUG_FINAL_CLIP_RECTS )
+			{
+				node3 = desktop->context->clipRects->rootNode;
+
+				while ( node3 != NULL )
+				{
+					rect = ( struct _Rect* ) node3->value;
+
+					context_strokeRect(
+
+						desktop->context,
+						rect->left,
+						rect->top,
+						rect->right - rect->left + 1,
+						rect->bottom - rect->top + 1,
+						0x308ACEFF,
+						2
+					);
+
+					node3 = node3->next;
+				}
+
+				// Debug only visible for one window...
+				break;
+			}
+
+
+			//
+			node = node->next;
+		}
+	}
 
 
 	// Draw mouse
@@ -1217,10 +1320,10 @@ void desktop_raiseWindow ( struct _Desktop* desktop )
 		// Mouse inside window
 		if (
 
-			( desktop->mouseX >= window->x )                     &&
-			( desktop->mouseX < ( window->x + window->width ) )  &&
-			( desktop->mouseY >= window->y )                     &&
-			( desktop->mouseY < ( window->y + window->height ) )
+			( desktop->mouseX >= window->x )                      &&
+			( desktop->mouseX <  ( window->x + window->width ) )  &&
+			( desktop->mouseY >= window->y )                      &&
+			( desktop->mouseY <  ( window->y + window->height ) )
 		)
 		{
 			// Raise window to top of list
@@ -1252,6 +1355,69 @@ void desktop_dragWindow ( struct _Desktop* desktop )
 	*/
 	desktop->dragTarget->x = desktop->mouseX - desktop->dragOffsetX;
 	desktop->dragTarget->y = desktop->mouseY - desktop->dragOffsetY;
+}
+
+struct _List* desktop_getWindowsAbove ( struct _Desktop* desktop, struct _Window* btmWindow )
+{
+	struct _List*     topWindows;
+	struct _Window*   curWindow;
+	struct _ListNode* node;
+	int               foundBtmWindow;
+	struct _Rect      btmWindowRect;
+	struct _Rect      curWindowRect;
+
+	//
+	topWindows = list_new();
+
+	if ( topWindows == NULL )
+	{
+		return NULL;
+	}	
+
+	//
+	btmWindowRect.top    = btmWindow->y;
+	btmWindowRect.left   = btmWindow->x;
+	btmWindowRect.bottom = btmWindow->y + btmWindow->height - 1;
+	btmWindowRect.right  = btmWindow->x + btmWindow->width - 1;
+
+
+	//
+	foundBtmWindow = 0;
+
+	node = desktop->children->rootNode;
+
+	while ( node != NULL )
+	{
+		curWindow = ( struct _Window* ) node->value;
+
+		// Find 'btmWindow' in desktop->children
+		if ( curWindow == btmWindow )
+		{
+			foundBtmWindow = 1;
+		}
+
+		/* Add windows to 'topWindows' that
+		    1) have a higher index than 'btmWindow' (tail is topmost)
+		    2) overlap with 'btmWindow'
+		*/
+		else if ( foundBtmWindow )  // 1)
+		{
+			curWindowRect.top    = curWindow->y;
+			curWindowRect.left   = curWindow->x;
+			curWindowRect.bottom = curWindow->y + curWindow->height - 1;
+			curWindowRect.right  = curWindow->x + curWindow->width - 1;
+
+			if ( rect_rectsIntersect( &curWindowRect, &btmWindowRect ) )  // 2)
+			{
+				list_appendNode( topWindows, curWindow );
+			}
+		}
+
+		//
+		node = node->next;
+	}
+
+	return topWindows;
 }
 
 

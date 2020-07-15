@@ -162,9 +162,10 @@ struct _Window* desktop_createWindow (
 	int              height,
 	uint32_t         color
 );
-void desktop_paint       ( struct _Desktop* desktop );
-void desktop_raiseWindow ( struct _Desktop* desktop );
-void desktop_dragWindow  ( struct _Desktop* desktop );
+void          desktop_paint           ( struct _Desktop* desktop );
+void          desktop_raiseWindow     ( struct _Desktop* desktop );
+void          desktop_dragWindow      ( struct _Desktop* desktop );
+struct _List* desktop_getWindowsAbove ( struct _Desktop* desktop, struct _Window* btmWindow );
 void desktop_processMouse (
 
 	struct _Desktop* desktop,
