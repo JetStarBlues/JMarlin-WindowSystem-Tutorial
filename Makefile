@@ -10,7 +10,7 @@ all:
 
 	gcc $(CFLAGS) $(SRC_FILES) $(LIBS) -o bin/main.e
 
-	objdump -S -M intel bin/main.e > bin/main.asm
+	# objdump -S -M intel bin/main.e > bin/main.asm
 
 
 

@@ -928,7 +928,7 @@ struct _Window* window_new (
 	int              y,
 	int              width,
 	int              height,
-	uint32_t         color,
+	uint32_t         debugColor,
 	struct _Context* context
 )
 {
@@ -941,26 +941,72 @@ struct _Window* window_new (
 		return NULL;
 	}
 
-	window->x       = x;
-	window->y       = y;
-	window->width   = width;
-	window->height  = height;
-	window->color   = color;
-	window->context = context;
+	window->x          = x;
+	window->y          = y;
+	window->width      = width;
+	window->height     = height;
+	window->debugColor = debugColor;
+	window->context    = context;
 
 	return window;
 }
 
 void window_paint ( struct _Window* window )
 {
-	context_fillRect(
+	// Debug
+	/*context_fillRect(
 
 		window->context,
 		window->x,
 		window->y,
 		window->width,
 		window->height,
-		window->color
+		window->debugColor
+	);*/
+
+	// Fill in the titlebar background
+	context_fillRect(
+
+		window->context,
+		window->x,
+		window->y,
+		window->width,
+		TITLE_BAR_HEIGHT,
+		WIN_TITLECOLOR
+	);
+
+	// Fill in the window background
+	context_fillRect(
+
+		window->context,
+		window->x,
+		window->y + TITLE_BAR_HEIGHT,
+		window->width,
+		window->height - TITLE_BAR_HEIGHT,
+		WIN_BGCOLOR
+	);
+
+	// Draw a 3px border around the window 
+	context_strokeRect(
+
+		window->context,
+		window->x,
+		window->y,
+		window->width,
+		window->height,
+		WIN_BORDERCOLOR,
+		3
+	);
+
+	// Draw a 3px border line under the titlebar
+	context_lineHorizontal(
+
+		window->context,
+		window->x,
+		window->y + TITLE_BAR_HEIGHT - 3,
+		window->width,
+		WIN_BORDERCOLOR,
+		3
 	);
 }
 
@@ -1027,8 +1073,8 @@ void desktop_paint ( struct _Desktop* desktop )
 	struct _ListNode* node3;
 	struct _Window*   window;
 	struct _Window*   clipWindow;
-	struct _Rect*     rect;
 	struct _Rect      winRect;
+	struct _Rect*     rect;
 	struct _Rect*     windowRect;
 	struct _Rect*     desktopRect;
 	struct _List*     clipWindows;
@@ -1085,7 +1131,7 @@ void desktop_paint ( struct _Desktop* desktop )
 			winRect.bottom = window->y + window->height - 1;
 			winRect.right  = window->x + window->width - 1;
 
-			context_subtractClipRect( desktop->context, &winRect, window->color );
+			context_subtractClipRect( desktop->context, &winRect, window->debugColor );
 
 			//
 			node = node->next;
@@ -1155,7 +1201,7 @@ void desktop_paint ( struct _Desktop* desktop )
 					window->y,
 					window->width,
 					window->height,
-					// window->color
+					// window->debugColor
 					0xFFCE96FF
 				);
 			}
@@ -1175,7 +1221,7 @@ void desktop_paint ( struct _Desktop* desktop )
 				return;
 			}
 
-			context_addClipRect( desktop->context, windowRect, window->color );
+			context_addClipRect( desktop->context, windowRect, window->debugColor );
 
 
 			// Get windows above and overlapping
@@ -1195,7 +1241,7 @@ void desktop_paint ( struct _Desktop* desktop )
 				winRect.bottom = clipWindow->y + clipWindow->height - 1;
 				winRect.right  = clipWindow->x + clipWindow->width - 1;
 
-				context_subtractClipRect( desktop->context, &winRect, clipWindow->color );
+				context_subtractClipRect( desktop->context, &winRect, clipWindow->debugColor );
 
 				//
 				node2 = node2->next;
@@ -1259,13 +1305,13 @@ struct _Window* desktop_createWindow (
 	int              y,
 	int              width,
 	int              height,
-	uint32_t         color
+	uint32_t         debugColor
 )
 {
 	struct _Window* window;
 	int             rStatus;
 
-	window = window_new( x, y, width, height, color, desktop->context );
+	window = window_new( x, y, width, height, debugColor, desktop->context );
 
 	if ( window == NULL )
 	{
@@ -1332,10 +1378,16 @@ void desktop_raiseWindow ( struct _Desktop* desktop )
 			list_appendNode( desktop->children, ( void* ) window );  // new tail
 
 
-			// Update drag target and offset...
-			desktop->dragTarget  = window;
-			desktop->dragOffsetX = desktop->mouseX - window->x;
-			desktop->dragOffsetY = desktop->mouseY - window->y;
+			/* Windows are draggable by their titlebars.
+			   Check if the mouse is inside the titlebar
+			*/
+			if ( desktop->mouseY < ( window->y + TITLE_BAR_HEIGHT ) )
+			{
+				// Update drag target and offset...
+				desktop->dragTarget  = window;
+				desktop->dragOffsetX = desktop->mouseX - window->x;
+				desktop->dragOffsetY = desktop->mouseY - window->y;
+			}
 
 
 			// Done
@@ -1343,8 +1395,8 @@ void desktop_raiseWindow ( struct _Desktop* desktop )
 		}
 
 
-		child  = child->prev;
-		i     -= 1;
+		child = child->prev;
+		i -= 1;
 	}
 }
 

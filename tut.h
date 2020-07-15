@@ -46,7 +46,7 @@ struct _Window {
 	int16_t  y;
 	uint16_t width;
 	uint16_t height;
-	uint32_t color;
+	uint32_t debugColor;
 
 	struct _Context* context;
 
@@ -71,6 +71,14 @@ struct _Desktop {
 	uint16_t        dragOffsetY;
 };
 
+
+// ------------------------------------------------------------------------------------------
+
+#define WIN_BGCOLOR     0xBBBBBBFF
+#define WIN_TITLECOLOR  0x7092BEFF
+#define WIN_BORDERCOLOR 0x000000FF
+
+#define TITLE_BAR_HEIGHT 25  // px
 
 
 
@@ -145,7 +153,7 @@ struct _Window* window_new (
 	int              y,
 	int              width,
 	int              height,
-	uint32_t         color,
+	uint32_t         debugColor,
 	struct _Context* context
 );
 void window_paint ( struct _Window* window );
@@ -160,7 +168,7 @@ struct _Window* desktop_createWindow (
 	int              y,
 	int              width,
 	int              height,
-	uint32_t         color
+	uint32_t         debugColor
 );
 void          desktop_paint           ( struct _Desktop* desktop );
 void          desktop_raiseWindow     ( struct _Desktop* desktop );
