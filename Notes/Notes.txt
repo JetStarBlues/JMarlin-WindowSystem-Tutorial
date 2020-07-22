@@ -1,6 +1,21 @@
-Desktop
-	. something that knows about all our windows
 
+struct _Desktop {
 
+	struct _Window window;  // Inherits window class
+	uint16_t       mouse_x;
+	uint16_t       mouse_y;
+
+};
+
+	" If you've never dealt with this design before, it's one of the cooler
+	  legal hacks we can use in C to allow for a type of inheritance.
+
+	  According to the C spec, the address of the first element of a struct
+	  and the address of the struct itself will always be equivalent.
+
+	  Therefore, by putting a Window at the beginning of the desktop struct
+	  we can cast any Desktop pointer into a Window pointer and pass it
+	  to any Window function without the function being any the wiser
+	"
 
 
