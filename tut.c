@@ -14,7 +14,7 @@
     2) Change arg of 'window_paint' in 'tut_init' to desired window
     3) Comment out 'window->paintHandler( window )' in 'window_paint'
 */
-#define DEBUG_WINDOW_CLIP 1
+#define DEBUG_WINDOW_CLIP 0
 
 struct _Desktop* gDesktop;  // hmmm...
 struct _Context* gContext;  // hmmm...
@@ -365,7 +365,7 @@ struct _List* rect_split ( struct _Rect* _targetRect, struct _Rect* cuttingRect 
 			targetRect.top,
 			targetRect.left,
 			targetRect.bottom,
-			cuttingRect->left - 1  // why -1?
+			cuttingRect->left - 1
 		);
 
 		if ( rect == NULL )
@@ -414,7 +414,7 @@ struct _List* rect_split ( struct _Rect* _targetRect, struct _Rect* cuttingRect 
 
 			targetRect.top,
 			targetRect.left,
-			cuttingRect->top - 1,  // why -1?
+			cuttingRect->top - 1,
 			targetRect.right
 		);
 
@@ -464,7 +464,7 @@ struct _List* rect_split ( struct _Rect* _targetRect, struct _Rect* cuttingRect 
 		rect = rect_new(
 
 			targetRect.top,
-			cuttingRect->right + 1,  // why +1?
+			cuttingRect->right + 1,
 			targetRect.bottom,
 			targetRect.right
 		);
@@ -513,7 +513,7 @@ struct _List* rect_split ( struct _Rect* _targetRect, struct _Rect* cuttingRect 
 		// Slice off portion of targetRect that falls to the bottom of the edge
 		rect = rect_new(
 
-			cuttingRect->bottom + 1,  // why +1?
+			cuttingRect->bottom + 1,
 			targetRect.left,
 			targetRect.bottom,
 			targetRect.right
@@ -1020,15 +1020,19 @@ void context_fillRect (
 		}
 	}
 
+	/* JK - We expect there to be at least one clipping rect.
+	   If none, it means the clipping-region is empty, and
+	   thus nothing is visible. So we draw nothing.
+	*/
+
 	// Otherwise, draw the rect unclipped (clipped to the screen)
-	else
+	/*else
 	{
 		context__boundedFillRect( context, x, y, width, height, NULL, color );
-	}
+	}*/
 }
 
-/* TODO: Does not clip
-*/
+// TODO: Does not clip
 void context_setPixel (
 
 	struct _Context* context,
@@ -1130,6 +1134,7 @@ int window_init (
 	window->dragOffsetX      = 0;
 	window->dragOffsetY      = 0;
 	window->paintHandler     = window_basePaintHandler;
+	window->mouseDownHandler = window_baseMouseDownHandler;
 
 	return 1;
 }
@@ -1650,7 +1655,7 @@ void window_paint ( struct _Window* window )
 
 	if ( DEBUG_WINDOW_CLIP )
 	{
-		debug_drawClipRects( window->context, 0xFFFF00FF, 6, getDebugColor( window ) );
+		debug_drawClipRects( window->context, 0xFFFF00FF, 1, getDebugColor( window ) );
 	}
 
 
@@ -1659,7 +1664,7 @@ void window_paint ( struct _Window* window )
 	*/
 	window->context->xOffset = windowX;
 	window->context->yOffset = windowY;
-//	window->paintHandler( window );
+	window->paintHandler( window );
 
 
 	// Paint children
@@ -1761,6 +1766,12 @@ void window_paintDecoration ( struct _Window* window )  // uses absolute positio
 
 
 // ------------------------------------------------------------------------------------------
+
+void window_baseMouseDownHandler ( struct _Window* window, int mouseX, int mouseY )
+{
+	//
+	printf( "baseMouseDownHandler for win%d\n", getWinName( window ) );
+}
 
 /* TODO - Why does each window track leftBtnState?
 */
@@ -1957,8 +1968,13 @@ void debug_drawClipRects ( struct _Context* context, uint32_t strokeColor, int s
 {
 	struct _ListNode* node;
 	struct _Rect*     rect;
+	int               i;
+
+	i = 0;
 
 	node = context->clipRects->rootNode;
+
+	printf( "clipRects:\n" );
 
 	while ( node != NULL )
 	{
@@ -1988,16 +2004,18 @@ void debug_drawClipRects ( struct _Context* context, uint32_t strokeColor, int s
 			strokeWeight
 		);
 
-		/*printf(
+		printf(
 
-			"%d %d %d %d\n",
+			"   clipRect%d - (%d, %d, %d, %d)\n",
+			i,
 			rect->left,
 			rect->top,
 			rect_getWidth( rect ),
 			rect_getHeight( rect )
-		);*/
+		);
 
 		node = node->next;
+		i += 1;
 	}
 }
 
@@ -2021,7 +2039,8 @@ void tut_init ( void )
 
 	win0 = window_createChildWindow( ( struct _Window* ) gDesktop,  10,  10, 300, 200, 0 );
 	win1 = window_createChildWindow( ( struct _Window* ) gDesktop, 100, 150, 400, 400, 0 );
-	win2 = window_createChildWindow( ( struct _Window* ) gDesktop, 200, 100, 200, 400, 0 );
+	// win2 = window_createChildWindow( ( struct _Window* ) gDesktop, 200, 100, 200, 400, 0 );
+	win2 = window_createChildWindow( ( struct _Window* ) gDesktop, 152, 38, 200, 400, 0 );
 
 	win3 = window_createChildWindow(
 
@@ -2035,14 +2054,13 @@ void tut_init ( void )
 	);
 
 
-//	window_paint( ( struct _Window* ) gDesktop );
-window_paint( win0 );
+	window_paint( ( struct _Window* ) gDesktop );
 }
 
 void tut_main ( void )
 {
 	// Poll mouse status...
-//	desktop_processMouse( gDesktop, gMouseX, gMouseY, gLeftBtnState );
+	desktop_processMouse( gDesktop, gMouseX, gMouseY, gLeftBtnState );
 }
 
 
@@ -2053,6 +2071,7 @@ void tut_main ( void )
    olcPixelGameEngine
    =~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~ */
 
+// TODO: Change this to blit, instead of per-pixel call
 void olcGlue_renderContextBuffer ( struct _Context* context )
 {
 	int          i;

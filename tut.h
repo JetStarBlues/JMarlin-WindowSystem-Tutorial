@@ -73,7 +73,8 @@ struct _Window {
 	uint16_t        dragOffsetY;
 
 	//
-	void ( *paintHandler ) ( struct _Window* );
+	void ( *paintHandler )     ( struct _Window* );
+	void ( *mouseDownHandler ) ( struct _Window*, int, int );
 };
 
 
@@ -85,7 +86,6 @@ struct _Window {
 #define WIN_TITLEBAR_COLOR   0x7092BEFF
 // #define WIN_BORDER_COLOR     0x000000FF
 #define WIN_BORDER_COLOR     0xFF0000FF
-// #define DESKTOP_COLOR        0x000000FF
 #define DESKTOP_COLOR        0x2C2137FF
 
 //
@@ -135,94 +135,28 @@ void             context_subtractClipRect  ( struct _Context* context, struct _R
 void             context_addClipRect       ( struct _Context* context, struct _Rect* newRect );
 void             context_intersectClipRect ( struct _Context* context, struct _Rect* newRect );
 void             context_clearClipRects    ( struct _Context* context );
-void context_lineHorizontal (
-
-	struct _Context* context,
-	int              x,
-	int              y,
-	int              width,
-	uint32_t         color,
-	int              strokeWeight
-);
-void context_lineVertical (
-
-	struct _Context* context,
-	int              x,
-	int              y,
-	int              height,
-	uint32_t         color,
-	int              strokeWeight
-);
-void context_strokeRect (
-
-	struct _Context* context,
-	int              x,
-	int              y,
-	int              width,
-	int              height,
-	uint32_t         color,
-	int              strokeWeight
-);
-void context_fillRect (
-
-	struct _Context* context,
-	int              x,
-	int              y,
-	int              width,
-	int              height,
-	uint32_t         color
-);
-void context_setPixel (
-
-	struct _Context* context,
-	int              x,
-	int              y,
-	uint32_t         color
-);
+void             context_lineHorizontal    ( struct _Context* context, int x, int y, int width, uint32_t color, int strokeWeight );
+void             context_lineVertical      ( struct _Context* context, int x, int y, int height, uint32_t color, int strokeWeight );
+void             context_strokeRect        ( struct _Context* context, int x, int y, int width, int height, uint32_t color, int strokeWeight );
+void             context_fillRect          ( struct _Context* context, int x, int y, int width, int height, uint32_t color );
+void             context_setPixel          ( struct _Context* context, int x, int y, uint32_t color );
 
 
 //
-struct _Window* window_new (
-
-	int              x,
-	int              y,
-	int              width,
-	int              height,
-	uint16_t         flags,
-	struct _Context* context
-);
-int window_init (
-
-	struct _Window*  window,
-	int              x,
-	int              y,
-	int              width,
-	int              height,
-	uint16_t         flags,
-	struct _Context* context
-);
-void window_basePaintHandler ( struct _Window* window );
-void window_paintDecoration  ( struct _Window* window );
-struct _Window* window_createChildWindow (
-
-	struct _Window* window,
-	int             x,
-	int             y,
-	int             width,
-	int             height,
-	uint16_t        flags
-);
-void          window_appendChildWindow    ( struct _Window* window, struct _Window* childWindow );
-struct _List* window_getChildWindowsAbove ( struct _Window* window, struct _Window* btmWindow );
-void          window_raiseChildWindow     ( struct _Window* window, int16_t mouseX, int16_t mouseY );
-void          window_dragChildWindow      ( struct _Window* window, int16_t mouseX, int16_t mouseY );
-void window_processMouse (
-
-	struct _Window* window,
-	int16_t         mouseX,
-	int16_t         mouseY,
-	uint8_t         leftBtnState
-);
+struct _Window* window_new                  ( int x, int y, int width, int height, uint16_t flags, struct _Context* context );
+int             window_init                 ( struct _Window* window, int x, int y, int width, int height, uint16_t flags, struct _Context* context );
+int             window_getAbsoluteXPosition ( struct _Window* window );
+int             window_getAbsoluteYPosition ( struct _Window* window );
+struct _Window* window_createChildWindow    ( struct _Window* window, int x, int y, int width, int height, uint16_t flags );
+void            window_appendChildWindow    ( struct _Window* window, struct _Window* childWindow );
+struct _List*   window_getChildWindowsAbove ( struct _Window* window, struct _Window* btmWindow );
+void            window_raiseChildWindow     ( struct _Window* window, int16_t mouseX, int16_t mouseY );
+void            window_dragChildWindow      ( struct _Window* window, int16_t mouseX, int16_t mouseY );
+void            window_paint                ( struct _Window* window );
+void            window_basePaintHandler     ( struct _Window* window );
+void            window_paintDecoration      ( struct _Window* window );
+void            window_baseMouseDownHandler ( struct _Window* window, int mouseX, int mouseY );
+void            window_processMouse         ( struct _Window* window, int16_t mouseX, int16_t mouseY, uint8_t leftBtnState );
 
 
 //
@@ -232,16 +166,12 @@ void cursor_paint ( struct _Context* context, int x, int y );
 //
 struct _Desktop* desktop_new          ( struct _Context* context );
 void             desktop_paintHandler ( struct _Window* desktop );
-void desktop_processMouse (
-
-	struct _Desktop* desktop,
-	int16_t          mouseX,
-	int16_t          mouseY,
-	uint8_t          leftBtnState
-);
+void             desktop_processMouse ( struct _Desktop* desktop, int16_t mouseX, int16_t mouseY, uint8_t leftBtnState );
 
 
 //
+void debug_strokeRect    ( struct _Context* context, struct _Rect* rect, uint32_t color, int strokeWeight );
+void debug_fillRect      ( struct _Context* context, struct _Rect* rect, uint32_t color );
 void debug_drawClipRects ( struct _Context* context, uint32_t strokeColor, int strokeWeight, uint32_t fillColor );
 
 
