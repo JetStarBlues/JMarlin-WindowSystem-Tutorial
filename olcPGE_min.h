@@ -16,9 +16,9 @@ enum rcode
 
 struct _HWButton
 {
-	bool bPressed;   // = false;
-	bool bReleased;  // = false;
-	bool bHeld;      // = false;
+	bool bPressed;   // set once, when button transitions from released to pressed
+	bool bReleased;  // set once, when button transitions from pressed to released
+	bool bHeld;      // set for all frames between press (inclusive) and release (exclusive)
 };
 
 typedef struct _HWButton HWButton;

@@ -65,7 +65,7 @@ struct _Window {
 	struct _List*   children;
 
 	// mouse
-	uint8_t prevLeftBtnState;  // Why is this tracked separately by each window?
+	// uint8_t prevLeftBtnState;  // Why is this tracked separately by each window?
 
 	// drag
 	struct _Window* dragTarget;
@@ -73,8 +73,10 @@ struct _Window {
 	uint16_t        dragOffsetY;
 
 	//
-	void ( *paintHandler )     ( struct _Window* );
-	void ( *mouseDownHandler ) ( struct _Window*, int, int );
+	void ( *paintHandler )             ( struct _Window* );
+	void ( *mousePressEventHandler )   ( struct _Window*, int, int );
+	void ( *mouseReleaseEventHandler ) ( struct _Window*, int, int );
+	void ( *mouseIsPressedHandler )    ( struct _Window*, int, int );
 };
 
 
@@ -100,9 +102,24 @@ struct _Desktop {
 	struct _Window window;
 
 	// mouse
-	int16_t mouseX;
-	int16_t mouseY;
+	// int mouseX;
+	// int mouseY;
 };
+
+
+// ------------------------------------------------------------------------------------------
+
+struct _MouseState {
+
+	int mouseX;
+	int mouseY;
+
+	int mousePressEvent;    // set once, when button transitions from released to pressed
+	int mouseReleaseEvent;  // set once, when button transitions from pressed to released
+	int mouseIsPressed;     // set for all frames between press (inclusive) and release (exclusive)
+};
+
+
 
 
 
@@ -143,20 +160,22 @@ void             context_setPixel          ( struct _Context* context, int x, in
 
 
 //
-struct _Window* window_new                  ( int x, int y, int width, int height, uint16_t flags, struct _Context* context );
-int             window_init                 ( struct _Window* window, int x, int y, int width, int height, uint16_t flags, struct _Context* context );
-int             window_getAbsoluteXPosition ( struct _Window* window );
-int             window_getAbsoluteYPosition ( struct _Window* window );
-struct _Window* window_createChildWindow    ( struct _Window* window, int x, int y, int width, int height, uint16_t flags );
-void            window_appendChildWindow    ( struct _Window* window, struct _Window* childWindow );
-struct _List*   window_getChildWindowsAbove ( struct _Window* window, struct _Window* btmWindow );
-void            window_raiseChildWindow     ( struct _Window* window, int16_t mouseX, int16_t mouseY );
-void            window_dragChildWindow      ( struct _Window* window, int16_t mouseX, int16_t mouseY );
-void            window_paint                ( struct _Window* window );
-void            window_basePaintHandler     ( struct _Window* window );
-void            window_paintDecoration      ( struct _Window* window );
-void            window_baseMouseDownHandler ( struct _Window* window, int mouseX, int mouseY );
-void            window_processMouse         ( struct _Window* window, int16_t mouseX, int16_t mouseY, uint8_t leftBtnState );
+struct _Window* window_new                             ( int x, int y, int width, int height, uint16_t flags, struct _Context* context );
+int             window_init                            ( struct _Window* window, int x, int y, int width, int height, uint16_t flags, struct _Context* context );
+int             window_getAbsoluteXPosition            ( struct _Window* window );
+int             window_getAbsoluteYPosition            ( struct _Window* window );
+struct _Window* window_createChildWindow               ( struct _Window* window, int x, int y, int width, int height, uint16_t flags );
+void            window_appendChildWindow               ( struct _Window* window, struct _Window* childWindow );
+struct _List*   window_getChildWindowsAbove            ( struct _Window* window, struct _Window* btmWindow );
+void            window_raiseChildWindow                ( struct _Window* window, int mouseX, int mouseY );
+void            window_dragChildWindow                 ( struct _Window* window, int mouseX, int mouseY );
+void            window_paint                           ( struct _Window* window );
+void            window_defaultPaintHandler             ( struct _Window* window );
+void            window_paintDecoration                 ( struct _Window* window );
+void            window_handleMouseEvent                ( struct _Window* window, struct _MouseState* mouseState, int relMouseX, int relMouseY );
+void            window_defaultMousePressEventHandler   ( struct _Window* window, int relMouseX, int relMouseY );
+void            window_defaultMouseReleaseEventHandler ( struct _Window* window, int relMouseX, int relMouseY );
+void            window_defaultMouseIsPressedHandler    ( struct _Window* window, int relMouseX, int relMouseY );
 
 
 //
@@ -164,9 +183,9 @@ void cursor_paint ( struct _Context* context, int x, int y );
 
 
 //
-struct _Desktop* desktop_new          ( struct _Context* context );
-void             desktop_paintHandler ( struct _Window* desktop );
-void             desktop_processMouse ( struct _Desktop* desktop, int16_t mouseX, int16_t mouseY, uint8_t leftBtnState );
+struct _Desktop* desktop_new              ( struct _Context* context );
+void             desktop_paintHandler     ( struct _Window* desktop );
+void             desktop_handleMouseEvent ( struct _Desktop* desktop, struct _MouseState* mouseState );
 
 
 //

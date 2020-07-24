@@ -2,6 +2,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "types.h"
 #include "olcPGE_min.h"
@@ -16,11 +17,9 @@
 */
 #define DEBUG_WINDOW_CLIP 0
 
-struct _Desktop* gDesktop;  // hmmm...
-struct _Context* gContext;  // hmmm...
-int16_t          gMouseX;
-int16_t          gMouseY;
-uint8_t          gLeftBtnState;
+struct _Desktop*    gDesktop;  // hmmm...
+struct _Context*    gContext;  // hmmm...
+struct _MouseState* gMouseState;
 
 struct _Window* win0;
 struct _Window* win1;
@@ -1128,13 +1127,14 @@ int window_init (
 		return 0;
 	}
 
-	window->parent           = NULL;
-	window->prevLeftBtnState = 0;
-	window->dragTarget       = NULL;
-	window->dragOffsetX      = 0;
-	window->dragOffsetY      = 0;
-	window->paintHandler     = window_basePaintHandler;
-	window->mouseDownHandler = window_baseMouseDownHandler;
+	window->parent                   = NULL;
+	window->dragTarget               = NULL;
+	window->dragOffsetX              = 0;
+	window->dragOffsetY              = 0;
+	window->paintHandler             = window_defaultPaintHandler;
+	window->mousePressEventHandler   = window_defaultMousePressEventHandler;
+	window->mouseReleaseEventHandler = window_defaultMouseReleaseEventHandler;
+	window->mouseIsPressedHandler    = window_defaultMouseIsPressedHandler;
 
 	return 1;
 }
@@ -1288,85 +1288,6 @@ struct _List* window_getChildWindowsAbove ( struct _Window* window, struct _Wind
 	}
 
 	return topWindows;
-}
-
-
-// ------------------------------------------------------------------------------------------
-
-void window_raiseChildWindow ( struct _Window* window, int16_t mouseX, int16_t mouseY )
-{
-	struct _ListNode* node;
-	struct _Window*   childWindow;
-	int               nChildren;
-	int               i;
-
-	nChildren = window->children->nItems;
-
-	if ( nChildren == 0 )
-	{
-		return;
-	}
-	else if ( nChildren == 1 )
-	{
-		node = window->children->rootNode;
-	}
-	else
-	{
-		node = window->children->tailNode;
-	}
-
-
-	i = nChildren - 1;
-
-	// Go through list backwards, because tail is topmost (drawn last)
-	while ( node != NULL )
-	{
-		childWindow = ( struct _Window* ) node->value;
-
-		// Mouse inside childWindow
-		if (
-
-			( mouseX >= childWindow->x )                           &&
-			( mouseX <  ( childWindow->x + childWindow->width ) )  &&
-			( mouseY >= childWindow->y )                           &&
-			( mouseY <  ( childWindow->y + childWindow->height ) )
-		)
-		{
-			// Raise childWindow to top of list
-			list_removeNode( window->children, i );
-
-			list_appendNode( window->children, ( void* ) childWindow );  // new tail
-
-
-			/* Windows are draggable by their titlebars.
-			   Check if the mouse is inside the titlebar
-			*/
-			if ( mouseY < ( childWindow->y + WIN_TITLEBAR_HEIGHT ) )
-			{
-				// Update drag target and offset...
-				window->dragTarget  = childWindow;
-				window->dragOffsetX = mouseX - childWindow->x;
-				window->dragOffsetY = mouseY - childWindow->y;
-			}
-
-
-			// Done
-			break;
-		}
-
-		//
-		node = node->prev;
-		i -= 1;
-	}
-}
-
-void window_dragChildWindow ( struct _Window* window, int16_t mouseX, int16_t mouseY )
-{
-	/* Applying the offset makes sure that the corner of the
-	   window does not suddenly snap to the mouse location
-	*/
-	window->dragTarget->x = mouseX - window->dragOffsetX;
-	window->dragTarget->y = mouseY - window->dragOffsetY;
 }
 
 
@@ -1683,7 +1604,7 @@ void window_paint ( struct _Window* window )
 
 // ------------------------------------------------------------------------------------------
 
-void window_basePaintHandler ( struct _Window* window )  // uses relative positions
+void window_defaultPaintHandler ( struct _Window* window )  // uses relative positions
 {
 	// Fill in the drawable area
 	context_fillRect(
@@ -1767,49 +1688,170 @@ void window_paintDecoration ( struct _Window* window )  // uses absolute positio
 
 // ------------------------------------------------------------------------------------------
 
-void window_baseMouseDownHandler ( struct _Window* window, int mouseX, int mouseY )
+void window_handleMouseEvent ( struct _Window* window, struct _MouseState* mouseState, int relMouseX, int relMouseY )
 {
-	//
-	printf( "baseMouseDownHandler for win%d\n", getWinName( window ) );
-}
+	struct _ListNode* node;
+	struct _Window*   childWindow;
+	int               nChildren;
+	int               childIsFinalTarget;
+	int               i;
 
-/* TODO - Why does each window track leftBtnState?
-*/
-void window_processMouse (
+	/* Find target window of click and raise to top.
 
-	struct _Window* window,
-	int16_t         mouseX,
-	int16_t         mouseY,
-	uint8_t         leftBtnState
-)
-{
-	// Button currently pressed
-	if ( leftBtnState )
+	   We go through the list of children backwards, because
+	   the target of the click is most likely a visible window,
+	   and the window at the tail of the list is the topmost window.
+	*/
+	childIsFinalTarget = false;
+	nChildren          = window->children->nItems;
+	i                  = nChildren - 1;
+
+	node = NULL;
+
+	if ( nChildren == 1 )
 	{
-		// Button was previously released
-		if ( window->prevLeftBtnState == 0 )
+		node = window->children->rootNode;
+	}
+	else
+	{
+		node = window->children->tailNode;
+	}
+
+	while ( node != NULL )
+	{
+		childWindow = ( struct _Window* ) node->value;
+
+		// Mouse inside childWindow
+		if (
+
+			( relMouseX >= childWindow->x )                           &&
+			( relMouseX <  ( childWindow->x + childWindow->width ) )  &&
+			( relMouseY >= childWindow->y )                           &&
+			( relMouseY <  ( childWindow->y + childWindow->height ) )
+		)
 		{
-			// Raise pressed window
-			window_raiseChildWindow( window, mouseX, mouseY );
+			// ...
+			if ( mouseState->mousePressEvent == 1 )
+			{
+				// Raise childWindow to top of list
+				list_removeNode( window->children, i );
+
+				list_appendNode( window->children, ( void* ) childWindow );  // new tail
+
+
+				/* Windows are draggable by their titlebars.
+				   If the mouse is inside the window's titlebar,
+				   set the window as the dragTarget.
+				*/
+				if (
+
+					( ( childWindow->flags & WIN_FLAG_NO_DECORATION ) == 0 ) &&
+					( relMouseY < ( childWindow->y + WIN_TITLEBAR_HEIGHT ) )
+				)
+				{
+					// Update drag target and offset...
+					window->dragTarget  = childWindow;
+					window->dragOffsetX = relMouseX - childWindow->x;
+					window->dragOffsetY = relMouseY - childWindow->y;
+				}
+			}
+
+
+			// Forward the mouse event to the target child
+			childIsFinalTarget = 1;
+
+			window_handleMouseEvent(
+
+				childWindow,
+				mouseState,
+				relMouseX - childWindow->x,
+				relMouseY - childWindow->y
+			);
+
+
+			// Since found target child, done
+			break;
+		}
+
+		//
+		node = node->prev;
+		i -= 1;
+	}
+
+
+	/* We are a target.
+	   Handle the mouse event accordingly.
+
+	   If we reach here directly (i.e. none of our children are a target),
+	   then we must be the final target. Otherwise we are a window along
+	   the path.
+	*/
+
+	// Button has just been pressed
+	if ( mouseState->mousePressEvent == 1 )
+	{
+		// Call final target's handler
+		if ( childIsFinalTarget == 0 )
+		{
+			window->mousePressEventHandler( window, relMouseX, relMouseY );
 		}
 	}
 
-	// Button currently released
-	else
+	// Button is pressed (held down)
+	else if ( mouseState->mouseIsPressed == 1 )
 	{
-		window->dragTarget = NULL;
+		// Everyone in path should update their position
+		window_dragChildWindow( window, relMouseX, relMouseY );
+
+		// Call final target's handler
+		if ( childIsFinalTarget == 0 )
+		{
+			window->mouseIsPressedHandler( window, relMouseX, relMouseY );
+		}
 	}
 
+	// Button has just been released
+	else if ( mouseState->mouseReleaseEvent == 1 )
+	{
+		// Everyone in path should update their dragTarget
+		window->dragTarget = NULL;
 
-	//
+		// Call final target's handler
+		if ( childIsFinalTarget == 0 )
+		{
+			window->mouseReleaseEventHandler( window, relMouseX, relMouseY );
+		}
+	}
+}
+
+void window_dragChildWindow ( struct _Window* window, int relMouseX, int relMouseY )
+{
 	if ( window->dragTarget != NULL )
 	{
-		// Drag pressed window
-		window_dragChildWindow( window, mouseX, mouseY );
+		/* Applying the offset makes sure that the corner of the
+		   window does not suddenly snap to the mouse location
+		*/
+		window->dragTarget->x = relMouseX - window->dragOffsetX;
+		window->dragTarget->y = relMouseY - window->dragOffsetY;
 	}
+}
 
-	// Updated saved state
-	window->prevLeftBtnState = leftBtnState;
+
+// ------------------------------------------------------------------------------------------
+
+void window_defaultMousePressEventHandler ( struct _Window* window, int mouseX, int mouseY )
+{
+	// printf( "defaultMousePressEventHandler for win%d\n", getWinName( window ) );
+}
+
+void window_defaultMouseReleaseEventHandler ( struct _Window* window, int relMouseX, int relMouseY )
+{
+	// printf( "defaultMouseReleaseEventHandler for win%d\n", getWinName( window ) );
+}
+
+void window_defaultMouseIsPressedHandler ( struct _Window* window, int relMouseX, int relMouseY )
+{
+	// printf( "defaultMouseIsPressedHandler for win%d\n", getWinName( window ) );
 }
 
 
@@ -1876,8 +1918,8 @@ struct _Desktop* desktop_new ( struct _Context* context )
 
 
 	// Initialize the desktop specific parts
-	desktop->mouseX          = winDesktop->width / 2;
-	desktop->mouseY          = winDesktop->height / 2;
+	// desktop->mouseX          = winDesktop->width / 2;
+	// desktop->mouseY          = winDesktop->height / 2;
 	winDesktop->paintHandler = desktop_paintHandler;  // override the default paintHandler
 
 
@@ -1904,30 +1946,24 @@ void desktop_paintHandler ( struct _Window* desktop )
 
 // ------------------------------------------------------------------------------------------
 
-void desktop_processMouse (
-
-	struct _Desktop* desktop,
-	int16_t          mouseX,
-	int16_t          mouseY,
-	uint8_t          leftBtnState
-)
+void desktop_handleMouseEvent ( struct _Desktop* desktop, struct _MouseState* mouseState )
 {
 	struct _Window* winDesktop;
 
 	winDesktop = ( struct _Window* ) desktop;
 
 	// Save mouse location (why?)
-	desktop->mouseX = mouseX;
-	desktop->mouseY = mouseY;
+	// desktop->mouseX = mouseState->mouseX;
+	// desktop->mouseY = mouseState->mouseY;
 
 	// Handle mouse
-	window_processMouse( winDesktop, mouseX, mouseY, leftBtnState );
+	window_handleMouseEvent( winDesktop, mouseState, mouseState->mouseX, mouseState->mouseY );
 
 	// Update screen to reflect changes mouse-event may have caused
 	window_paint( winDesktop );
 
 	// Draw the mouse
-	cursor_paint( winDesktop->context, mouseX, mouseY );
+	cursor_paint( winDesktop->context, mouseState->mouseX, mouseState->mouseY );
 }
 
 
@@ -2033,6 +2069,9 @@ void tut_init ( void )
 	// struct _Window* win2;
 	// struct _Window* win3;
 
+	gMouseState = ( struct _MouseState* ) malloc( sizeof( struct _MouseState ) );
+	memset( gMouseState, 0, sizeof( struct _MouseState ) );
+
 	gContext = context_new( SCREEN_WIDTH, SCREEN_HEIGHT );
 
 	gDesktop = desktop_new( gContext );
@@ -2060,7 +2099,18 @@ void tut_init ( void )
 void tut_main ( void )
 {
 	// Poll mouse status...
-	desktop_processMouse( gDesktop, gMouseX, gMouseY, gLeftBtnState );
+	desktop_handleMouseEvent( gDesktop, gMouseState );
+}
+
+void tut_exit ( void )
+{
+	free( gMouseState );
+
+	// TODO
+	// context_free( gContext );
+
+	// TODO... (free desktop, free windows)
+	// desktop_free( gDesktop );
 }
 
 
@@ -2108,10 +2158,12 @@ void olcGlue_renderContextBuffer ( struct _Context* context )
 
 void olcGlue_getMouseStatus ( void )
 {
-	gMouseX = PGE_getMouseX();
-	gMouseY = PGE_getMouseY();
+	gMouseState->mouseX = PGE_getMouseX();
+	gMouseState->mouseY = PGE_getMouseY();
 
-	gLeftBtnState = PGE_getMouse( MOUSE_LEFT ).bHeld;
+	gMouseState->mousePressEvent   = PGE_getMouse( MOUSE_LEFT ).bPressed;
+	gMouseState->mouseReleaseEvent = PGE_getMouse( MOUSE_LEFT ).bReleased;
+	gMouseState->mouseIsPressed    = PGE_getMouse( MOUSE_LEFT ).bHeld;
 }
 
 
@@ -2138,6 +2190,8 @@ bool UI_onUserUpdate ( void )
 
 bool UI_onUserDestroy ( void )
 {
+	tut_exit();
+
 	return true;
 }
 
