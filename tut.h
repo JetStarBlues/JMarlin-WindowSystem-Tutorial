@@ -52,10 +52,10 @@ struct _Window;
 
 struct _Window {
 
-	int16_t  x;
-	int16_t  y;
-	uint16_t width;
-	uint16_t height;
+	int x;
+	int y;
+	int width;
+	int height;
 
 	uint16_t flags;
 
@@ -64,13 +64,10 @@ struct _Window {
 	struct _Window* parent;
 	struct _List*   children;
 
-	// mouse
-	// uint8_t prevLeftBtnState;  // Why is this tracked separately by each window?
-
 	// drag
 	struct _Window* dragTarget;
-	uint16_t        dragOffsetX;
-	uint16_t        dragOffsetY;
+	int             dragOffsetX;
+	int             dragOffsetY;
 
 	//
 	void ( *paintHandler )             ( struct _Window* );
@@ -99,7 +96,7 @@ struct _Window {
 
 struct _Desktop {
 
-	struct _Window window;
+	struct _Window window;  // "inherit" window class
 
 	// mouse
 	// int mouseX;
@@ -120,7 +117,17 @@ struct _MouseState {
 };
 
 
+// ------------------------------------------------------------------------------------------
 
+struct _ToggleButton {
+
+	struct _Window window;  // "inherit" window class
+
+	int isSet;  // 1 - set, 0 - cleared
+};
+
+#define TOGGLEBTN_COLOR     0x084062FF;
+#define TOGGLEBTN_SET_COLOR 0x002841FF;
 
 
 
@@ -148,6 +155,7 @@ struct _Rect* rect_getIntersection ( struct _Rect* _targetRect, struct _Rect* cu
 
 //
 struct _Context* context_new               ( int width, int height );
+void             context_free              ( struct _Context* context );
 void             context_subtractClipRect  ( struct _Context* context, struct _Rect* subRect );
 void             context_addClipRect       ( struct _Context* context, struct _Rect* newRect );
 void             context_intersectClipRect ( struct _Context* context, struct _Rect* newRect );
@@ -184,8 +192,14 @@ void cursor_paint ( struct _Context* context, int x, int y );
 
 //
 struct _Desktop* desktop_new              ( struct _Context* context );
-void             desktop_paintHandler     ( struct _Window* desktop );
+void             desktop_paintHandler     ( struct _Window* winDesktop );
 void             desktop_handleMouseEvent ( struct _Desktop* desktop, struct _MouseState* mouseState );
+
+
+//
+struct _ToggleButton* toggleButton_new                      ( int x, int y, int w, int h );
+void                  toggleButton_paintHandler             ( struct _Window* winToggleButton );
+void                  toggleButton_mouseReleaseEventHandler ( struct _Window* winToggleButton, int relMouseX, int relMouseY );
 
 
 //

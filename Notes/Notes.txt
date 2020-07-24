@@ -1,3 +1,5 @@
+Everything is a window
+
 
 struct _Desktop {
 
@@ -17,5 +19,27 @@ struct _Desktop {
 	  we can cast any Desktop pointer into a Window pointer and pass it
 	  to any Window function without the function being any the wiser
 	"
+
+
+From tut 7
+
+" One final thing to note that we haven't really discussed at all in this series...
+  How would we make all of this work as a service for user applications?
+
+  [I]f you were going to do some kind of Windows-type model where this service
+  gets mapped into each process's address space and can be called into
+  directly then you'd pretty much be done with it.
+
+  But if you're doing something more walled-off and IPC-focused, you might
+  use the window pointers as handles to pass back and forth in messages between
+  your user process and our window manager.
+  And in your standard paint functions, for example, at the end of the default draw
+  you could send a 'paint' message to the process that created the window,
+  sending the window's context pointer as a handle that could be passed back to
+  the context functions through message wrappers.
+
+  Unfortunately, though, this is just a rough thought. The way you integrate
+  that is going to be really dependent on how your particular OS handles IPC.
+"
 
 

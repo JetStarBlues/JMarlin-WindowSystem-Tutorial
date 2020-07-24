@@ -660,6 +660,15 @@ struct _Context* context_new ( int width, int height )
 	return context;
 }
 
+void context_free ( struct _Context* context )
+{
+	free( context->frameBuffer );
+
+	free( context );
+
+	context = NULL;
+}
+
 
 // ------------------------------------------------------------------------------------------
 
@@ -1137,6 +1146,11 @@ int window_init (
 	window->mouseIsPressedHandler    = window_defaultMouseIsPressedHandler;
 
 	return 1;
+}
+
+void window_free ( struct _Window* window )
+{
+	// TODO
 }
 
 
@@ -1854,6 +1868,15 @@ void window_defaultMouseIsPressedHandler ( struct _Window* window, int relMouseX
 	// printf( "defaultMouseIsPressedHandler for win%d\n", getWinName( window ) );
 }
 
+/*
+	Other possible mouse events include:
+	 (https://www.w3schools.com/jsref/obj_mouseevent.asp)
+
+		. mouseEnter - pointer moved onto an element
+		. mouseLeave - pointer moved out of an element
+		. mouseMove  - pointer moved while over an element
+*/
+
 
 
 
@@ -1918,8 +1941,8 @@ struct _Desktop* desktop_new ( struct _Context* context )
 
 
 	// Initialize the desktop specific parts
-	// desktop->mouseX          = winDesktop->width / 2;
-	// desktop->mouseY          = winDesktop->height / 2;
+	// desktop->mouseX = winDesktop->width / 2;
+	// desktop->mouseY = winDesktop->height / 2;
 	winDesktop->paintHandler = desktop_paintHandler;  // override the default paintHandler
 
 
@@ -1927,18 +1950,22 @@ struct _Desktop* desktop_new ( struct _Context* context )
 	return desktop;
 }
 
+void desktop_free ( struct _Desktop* desktop )
+{
+	// TODO
+}
 
 // ------------------------------------------------------------------------------------------
 
-void desktop_paintHandler ( struct _Window* desktop )
+void desktop_paintHandler ( struct _Window* winDesktop )
 {
 	context_fillRect(
 
-		desktop->context,
+		winDesktop->context,
 		0,
 		0,
-		desktop->context->width,
-		desktop->context->height,
+		winDesktop->width,
+		winDesktop->height,
 		DESKTOP_COLOR
 	);
 }
@@ -1964,6 +1991,118 @@ void desktop_handleMouseEvent ( struct _Desktop* desktop, struct _MouseState* mo
 
 	// Draw the mouse
 	cursor_paint( winDesktop->context, mouseState->mouseX, mouseState->mouseY );
+}
+
+
+
+
+/* ==========================================================================================
+   ...
+   ========================================================================================== */
+
+struct _ToggleButton* toggleButton_new ( int x, int y, int w, int h )
+{
+	struct _ToggleButton* toggleButton;
+	struct _Window*       winToggleButton;
+	uint16_t              winFlags;
+	int                   status;
+
+	// Allocate space for the button
+	toggleButton = ( struct _ToggleButton* ) malloc( sizeof( struct _ToggleButton ) );
+
+	if ( toggleButton == NULL )
+	{
+		return NULL;
+	}
+
+
+	// Initialize the window part of the button
+	winToggleButton = ( struct _Window* ) toggleButton;
+
+	winFlags = WIN_FLAG_NO_DECORATION;
+
+	status = window_init(
+
+		winToggleButton,
+		x, y,
+		w, h,
+		winFlags,
+		NULL
+	);
+
+	if ( status == 0 )
+	{
+		free( toggleButton );
+
+		return NULL;
+	}
+
+
+	// Initialize the toggleButton specific parts
+	toggleButton->isSet = 0;
+
+	winToggleButton->paintHandler             = toggleButton_paintHandler;
+	winToggleButton->mouseReleaseEventHandler = toggleButton_mouseReleaseEventHandler;
+
+
+	//
+	return toggleButton;
+}
+
+void toggleButton_free ( struct _ToggleButton* toggleButton )
+{
+	// TODO
+}
+
+
+// ------------------------------------------------------------------------------------------
+
+void toggleButton_paintHandler ( struct _Window* winToggleButton )
+{
+	struct _ToggleButton* toggleButton;
+	uint32_t              color;
+
+	toggleButton = ( struct _ToggleButton* ) winToggleButton;
+
+
+	if ( toggleButton->isSet == 1 )
+	{
+		color = TOGGLEBTN_SET_COLOR;
+	}
+	else
+	{
+		color = TOGGLEBTN_COLOR;
+	}
+
+	context_fillRect(
+
+		winToggleButton->context,
+		0,
+		0,
+		winToggleButton->width,
+		winToggleButton->height,
+		color
+	);
+}
+
+
+// ------------------------------------------------------------------------------------------
+
+void toggleButton_mouseReleaseEventHandler ( struct _Window* winToggleButton, int relMouseX, int relMouseY )
+{
+	struct _ToggleButton* toggleButton;
+
+	toggleButton = ( struct _ToggleButton* ) winToggleButton;
+
+	// Toggle button state
+	if ( toggleButton->isSet == 1 )
+	{
+		toggleButton->isSet = 0;
+	}
+	else
+	{
+		toggleButton->isSet = 1;
+	}
 }
 
 
@@ -2068,7 +2207,10 @@ void tut_init ( void )
 	// struct _Window* win1;
 	// struct _Window* win2;
 	// struct _Window* win3;
+	struct _ToggleButton* btn;
 
+
+	//
 	gMouseState = ( struct _MouseState* ) malloc( sizeof( struct _MouseState ) );
 	memset( gMouseState, 0, sizeof( struct _MouseState ) );
 
@@ -2076,29 +2218,49 @@ void tut_init ( void )
 
 	gDesktop = desktop_new( gContext );
 
+
+
+	//
 	win0 = window_createChildWindow( ( struct _Window* ) gDesktop,  10,  10, 300, 200, 0 );
 	win1 = window_createChildWindow( ( struct _Window* ) gDesktop, 100, 150, 400, 400, 0 );
-	// win2 = window_createChildWindow( ( struct _Window* ) gDesktop, 200, 100, 200, 400, 0 );
-	win2 = window_createChildWindow( ( struct _Window* ) gDesktop, 152, 38, 200, 400, 0 );
+	win2 = window_createChildWindow( ( struct _Window* ) gDesktop, 200, 100, 200, 400, 0 );
+
 
 	win3 = window_createChildWindow(
 
 		win0,
-		win0->x + win0->width - 50,
-		15,
-		// win0->x + win0->width / 2 - 50,
-		// win0->y + win0->height / 2 - 50,
+		( win0->width / 2 ) - ( 100 / 2 ),
+		( win0->height / 2 ) - ( 100 / 2 ),
 		100, 100,
 		0
 	);
 
 
+	btn = toggleButton_new(
+
+		( win2->width / 2 ) - ( 70 / 2 ),
+		( win2->height / 2 ) - ( 30 / 2 ),
+		70, 30
+	);
+
+	window_appendChildWindow( win2, ( struct _Window* ) btn );
+
+
+
+	// Do the initial paint
 	window_paint( ( struct _Window* ) gDesktop );
+
+
+	// Install mouse callback
+	// fakeOS_installMouseUpdateCallback( ... )
 }
 
 void tut_main ( void )
 {
-	// Poll mouse status...
+	// Poll mouse status
+	// fakeOS_waitForMouseUpdate( ... )
+
+	//
 	desktop_handleMouseEvent( gDesktop, gMouseState );
 }
 
@@ -2106,10 +2268,9 @@ void tut_exit ( void )
 {
 	free( gMouseState );
 
-	// TODO
-	// context_free( gContext );
+	context_free( gContext );
 
-	// TODO... (free desktop, free windows)
+	// TODO (free desktop, free windows, free buttons and misc widgets...)
 	// desktop_free( gDesktop );
 }
 
