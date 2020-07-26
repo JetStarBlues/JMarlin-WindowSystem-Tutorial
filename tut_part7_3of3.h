@@ -1,4 +1,3 @@
-// ------------------------------------------------------------------------------------------
 
 struct _List {
 
@@ -122,6 +121,17 @@ struct _MouseState {
 };
 
 
+// ------------------------------------------------------------------------------------------
+
+struct _ToggleButton {
+
+	struct _Window window;  // "inherit" window class
+
+	int isSet;  // 1 - set, 0 - cleared
+};
+
+#define TOGGLEBTN_COLOR     0x084062FF;
+#define TOGGLEBTN_SET_COLOR 0x002841FF;
 
 
 
@@ -169,13 +179,11 @@ int             window_getAbsoluteYPosition            ( struct _Window* window 
 struct _Window* window_createChildWindow               ( struct _Window* window, int x, int y, int width, int height, uint16_t flags );
 void            window_appendChildWindow               ( struct _Window* window, struct _Window* childWindow );
 struct _List*   window_getChildWindowsAbove            ( struct _Window* window, struct _Window* btmWindow );
-void            window_createClippingRegion            ( struct _Window* window, int inRecursion );
+void            window_raiseChildWindow                ( struct _Window* window, int mouseX, int mouseY );
+void            window_dragChildWindow                 ( struct _Window* window, int mouseX, int mouseY );
 void            window_paint                           ( struct _Window* window );
 void            window_defaultPaintHandler             ( struct _Window* window );
 void            window_paintDecoration                 ( struct _Window* window );
-void            window_updateDecoration                ( struct _Window* window );
-void            window_raiseWindow                     ( struct _Window* window );
-void            window_dragChildWindow                 ( struct _Window* window, int mouseX, int mouseY );
 void            window_handleMouseEvent                ( struct _Window* window, struct _MouseState* mouseState, int relMouseX, int relMouseY );
 void            window_defaultMousePressEventHandler   ( struct _Window* window, int relMouseX, int relMouseY );
 void            window_defaultMouseReleaseEventHandler ( struct _Window* window, int relMouseX, int relMouseY );
@@ -193,7 +201,17 @@ void             desktop_handleMouseEvent ( struct _Desktop* desktop, struct _Mo
 
 
 //
+struct _ToggleButton* toggleButton_new                      ( int x, int y, int w, int h );
+void                  toggleButton_paintHandler             ( struct _Window* winToggleButton );
+void                  toggleButton_mouseReleaseEventHandler ( struct _Window* winToggleButton, int relMouseX, int relMouseY );
+
+
+//
 void debug_strokeRect    ( struct _Context* context, struct _Rect* rect, uint32_t color, int strokeWeight );
 void debug_fillRect      ( struct _Context* context, struct _Rect* rect, uint32_t color );
 void debug_drawClipRects ( struct _Context* context, uint32_t strokeColor, int strokeWeight, uint32_t fillColor );
+
+
+
+
 

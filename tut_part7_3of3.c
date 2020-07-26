@@ -8,7 +8,6 @@
 #include "olcPGE_min.h"
 #include "params.h"
 #include "tut.h"
-#include "widgets.h"
 
 
 /* To visualize debug properly:
@@ -1033,6 +1032,12 @@ void context_fillRect (
 	   If none, it means the clipping-region is empty, and
 	   thus nothing is visible. So we draw nothing.
 	*/
+
+	// Otherwise, draw the rect unclipped (clipped to the screen)
+	/*else
+	{
+		context__boundedFillRect( context, x, y, width, height, NULL, color );
+	}*/
 }
 
 // TODO: Does not clip
@@ -1135,8 +1140,6 @@ int window_init (
 	window->dragTarget               = NULL;
 	window->dragOffsetX              = 0;
 	window->dragOffsetY              = 0;
-    window->activeChild              = NULL;
-    window->isActive                 = 0;
 	window->paintHandler             = window_defaultPaintHandler;
 	window->mousePressEventHandler   = window_defaultMousePressEventHandler;
 	window->mouseReleaseEventHandler = window_defaultMouseReleaseEventHandler;
@@ -1253,7 +1256,7 @@ struct _List* window_getChildWindowsAbove ( struct _Window* window, struct _Wind
 	if ( topWindows == NULL )
 	{
 		return NULL;
-	}
+	}	
 
 	//
 	btmWindowRect.top    = btmWindow->y;
@@ -1278,7 +1281,7 @@ struct _List* window_getChildWindowsAbove ( struct _Window* window, struct _Wind
 		}
 
 		/* Add windows to 'topWindows' that
-		    1) have a higher index than 'btmWindow' (tail is top-most)
+		    1) have a higher index than 'btmWindow' (tail is topmost)
 		    2) overlap with 'btmWindow'
 		*/
 		else if ( foundBtmWindow )  // 1)
@@ -1299,69 +1302,6 @@ struct _List* window_getChildWindowsAbove ( struct _Window* window, struct _Wind
 	}
 
 	return topWindows;
-}
-
-struct _List* window_getChildWindowsBelow ( struct _Window* window, struct _Window* topWindow )
-{
-	struct _List*     btmWindows;
-	struct _Window*   curWindow;
-	struct _ListNode* node;
-	int               foundTopWindow;
-	struct _Rect      topWindowRect;
-	struct _Rect      curWindowRect;
-
-	//
-	btmWindows = list_new();
-
-	if ( btmWindows == NULL )
-	{
-		return NULL;
-	}
-
-	//
-	topWindowRect.top    = topWindow->y;
-	topWindowRect.left   = topWindow->x;
-	topWindowRect.bottom = topWindow->y + topWindow->height - 1;
-	topWindowRect.right  = topWindow->x + topWindow->width - 1;
-
-
-	//
-	foundTopWindow = 0;
-
-	node = window->children->tailNode;
-
-	while ( node != NULL )
-	{
-		curWindow = ( struct _Window* ) node->value;
-
-		// Find 'topWindow' in window->children
-		if ( curWindow == topWindow )
-		{
-			foundTopWindow = 1;
-		}
-
-		/* Add windows to 'topWindows' that
-		    1) have a lower index than 'topWindow' (head is bottom-most)
-		    2) overlap with 'topWindow'
-		*/
-		else if ( foundTopWindow )  // 1)
-		{
-			curWindowRect.top    = curWindow->y;
-			curWindowRect.left   = curWindow->x;
-			curWindowRect.bottom = curWindow->y + curWindow->height - 1;
-			curWindowRect.right  = curWindow->x + curWindow->width - 1;
-
-			if ( rect_rectsIntersect( &curWindowRect, &topWindowRect ) )  // 2)
-			{
-				list_appendNode( btmWindows, curWindow );
-			}
-		}
-
-		//
-		node = node->prev;
-	}
-
-	return btmWindows;
 }
 
 
@@ -1392,8 +1332,8 @@ TODO: Don't quite understand tree traversal of this function.
 Let's follow path of a call to 'window_paint( win0 )':
 
     window_paint win0
-    ├── window_createClippingRegion win0
-    │   ├── window_createClippingRegion win99
+    ├── window_getClippingRegion win0
+    │   ├── window_getClippingRegion win99
     │   │   └── addClipRect desktop
     │   ├── intersectClipRect ancestors of win0
     │   ├── subtractClipRect sibling win1
@@ -1402,9 +1342,9 @@ Let's follow path of a call to 'window_paint( win0 )':
     ├── subtractClipRect child win3
     │
     └── window_paint win3
-        ├── window_createClippingRegion win3
-        │   ├── window_createClippingRegion win0
-        │   │   ├── window_createClippingRegion win99
+        ├── window_getClippingRegion win3
+        │   ├── window_getClippingRegion win0
+        │   │   ├── window_getClippingRegion win99
         │   │   │   └── addClipRect desktop
         │   │   ├── intersectClipRect ancestors of win0
         │   │   ├── subtractClipRect sibling win1
@@ -1413,7 +1353,7 @@ Let's follow path of a call to 'window_paint( win0 )':
         └── intersectClipRect decoration win3
 */
 
-void window_createClippingRegion ( struct _Window* window, int inRecursion )
+void window_getClippingRegion ( struct _Window* window, int inRecursion )
 {
 	int               windowX;
 	int               windowY;
@@ -1428,7 +1368,7 @@ void window_createClippingRegion ( struct _Window* window, int inRecursion )
 
 	if ( DEBUG_WINDOW_CLIP )
 	{
-		printf( "window_createClippingRegion win%d\n", getWinName( window ) );
+		printf( "window_getClippingRegion win%d\n", getWinName( window ) );
 	}
 
 
@@ -1490,7 +1430,7 @@ void window_createClippingRegion ( struct _Window* window, int inRecursion )
 
 
 	// Get ancestors clipping-region?
-	window_createClippingRegion( window->parent, 1 );
+	window_getClippingRegion( window->parent, 1 );
 
 	/* Set the clipping-region as the union of the
 	   ancestors' clipping-region and the window...
@@ -1572,11 +1512,11 @@ void window_paint ( struct _Window* window )
 	windowY = window_getAbsoluteYPosition( window );
 
 
-	/* Create a clipping-region representing the (visible) parts
+	/* Create a clipping region representing the (visible) parts
 	   of the window which are not hidden/occluded by its ancestors
 	   or siblings
 	*/
-	window_createClippingRegion( window, 0 );
+	window_getClippingRegion( window, 0 );
 
 
 	/* If the window uses a window decoration, paint it.
@@ -1694,23 +1634,12 @@ void window_defaultPaintHandler ( struct _Window* window )  // uses relative pos
 
 void window_paintDecoration ( struct _Window* window )  // uses absolute positions
 {
-	int      windowX;
-	int      windowY;
-	uint32_t titlebarColor;
+	int windowX;
+	int windowY;
 
 	//
 	windowX = window_getAbsoluteXPosition( window );
 	windowY = window_getAbsoluteYPosition( window );
-
-	//
-	if ( window == window->parent->activeChild )
-	{
-		titlebarColor = WIN_TITLEBAR_COLOR;
-	}
-	else
-	{
-		titlebarColor = WIN_TITLEBAR_INACTIVE_COLOR;
-	}
 
 
 	// Debug
@@ -1732,7 +1661,7 @@ void window_paintDecoration ( struct _Window* window )  // uses absolute positio
 		windowY,
 		window->width,
 		WIN_TITLEBAR_HEIGHT,
-		titlebarColor
+		WIN_TITLEBAR_COLOR
 	);
 
 	// Fill in the window background
@@ -1768,130 +1697,6 @@ void window_paintDecoration ( struct _Window* window )  // uses absolute positio
 		WIN_BORDER_COLOR,
 		WIN_BORDER_WIDTH
 	);
-}
-
-
-// ------------------------------------------------------------------------------------------
-
-void window_updateDecoration ( struct _Window* window )
-{
-	// Nothing to do
-	if ( ( window->flags & WIN_FLAG_NO_DECORATION ) == 1 )
-	{
-		return;
-	}
-
-	// Create a clipping-region representing the visible parts of the window
-	window_createClippingRegion( window, 0 );
-	// window_createClippingRegion( window, 0, NULL );
-
-	// Redraw the decoration
-	window_paintDecoration( window );
-
-	//
-	context_clearClipRects( window->context );
-}
-
-
-// ------------------------------------------------------------------------------------------
-
-void window_raiseWindow ( struct _Window* window )
-{
-	struct _Window*   parent;
-	struct _Window*   lastActiveChild;
-	struct _ListNode* node;
-	struct _Window*   childWindow;
-	int               i;
-
-	// If we don't have a parent, we don't have siblings
-	if ( window->parent == NULL )
-	{
-		return;
-	}
-
-	parent = window->parent;
-
-
-	// If already active, nothing to do
-	if ( parent->activeChild == window )
-	{
-		return;
-	}
-
-
-	// Raise the window, by making it the new tail
-	i    = parent->children->nItems - 1;
-	node = parent->children->tailNode;
-
-	while ( node != NULL )
-	{
-		childWindow = ( struct _Window* ) node->value;
-
-		if ( childWindow == window )
-		{
-			list_removeNode( parent->children, i );
-
-			list_appendNode( parent->children, ( void* ) childWindow );  // new tail
-
-			break;
-		}
-
-		node = node->prev;
-		i -= 1;
-	}
-
-
-	// Mark window as the active child
-	lastActiveChild     = parent->activeChild;
-	parent->activeChild = window;
-
-	window->isActive = 1;
-
-	if ( lastActiveChild != NULL )
-	{
-		lastActiveChild->isActive = 0;
-	}
-
-
-	/* Redraw window (to paint parts that were previously hidden
-	   and reflect new active state)
-	*/
-	window_paint( window );
-	// window_paint( window, NULL, 1 );
-
-
-	// Redraw decoration of lastActiveChild, to reflect new inactive state
-	if ( lastActiveChild != NULL )
-	{
-		window_updateDecoration( lastActiveChild );
-	}
-}
-
-void window_moveWindow ( struct _Window* window, int newX, int newY )
-{
-	//
-}
-
-
-// ------------------------------------------------------------------------------------------
-
-void window_dragChildWindow ( struct _Window* window, int relMouseX, int relMouseY )
-{
-	if ( window->dragTarget != NULL )
-	{
-		/* Applying the offset makes sure that the corner of the
-		   window does not suddenly snap to the mouse location
-		*/
-		window->dragTarget->x = relMouseX - window->dragOffsetX;
-		window->dragTarget->y = relMouseY - window->dragOffsetY;
-
-		/*window_moveWindow(
-
-			window->dragTarget,
-			relMouseX - window->dragOffsetX,
-			relMouseY - window->dragOffsetY
-		);*/
-	}
 }
 
 
@@ -1943,7 +1748,9 @@ void window_handleMouseEvent ( struct _Window* window, struct _MouseState* mouse
 			if ( mouseState->mousePressEvent == 1 )
 			{
 				// Raise childWindow to top of list
-				window_raiseWindow( childWindow );
+				list_removeNode( window->children, i );
+
+				list_appendNode( window->children, ( void* ) childWindow );  // new tail
 
 
 				/* Windows are draggable by their titlebars.
@@ -2028,6 +1835,18 @@ void window_handleMouseEvent ( struct _Window* window, struct _MouseState* mouse
 		{
 			window->mouseReleaseEventHandler( window, relMouseX, relMouseY );
 		}
+	}
+}
+
+void window_dragChildWindow ( struct _Window* window, int relMouseX, int relMouseY )
+{
+	if ( window->dragTarget != NULL )
+	{
+		/* Applying the offset makes sure that the corner of the
+		   window does not suddenly snap to the mouse location
+		*/
+		window->dragTarget->x = relMouseX - window->dragOffsetX;
+		window->dragTarget->y = relMouseY - window->dragOffsetY;
 	}
 }
 
@@ -2172,6 +1991,118 @@ void desktop_handleMouseEvent ( struct _Desktop* desktop, struct _MouseState* mo
 
 	// Draw the mouse
 	cursor_paint( winDesktop->context, mouseState->mouseX, mouseState->mouseY );
+}
+
+
+
+
+/* ==========================================================================================
+   ...
+   ========================================================================================== */
+
+struct _ToggleButton* toggleButton_new ( int x, int y, int w, int h )
+{
+	struct _ToggleButton* toggleButton;
+	struct _Window*       winToggleButton;
+	uint16_t              winFlags;
+	int                   status;
+
+	// Allocate space for the button
+	toggleButton = ( struct _ToggleButton* ) malloc( sizeof( struct _ToggleButton ) );
+
+	if ( toggleButton == NULL )
+	{
+		return NULL;
+	}
+
+
+	// Initialize the window part of the button
+	winToggleButton = ( struct _Window* ) toggleButton;
+
+	winFlags = WIN_FLAG_NO_DECORATION;
+
+	status = window_init(
+
+		winToggleButton,
+		x, y,
+		w, h,
+		winFlags,
+		NULL
+	);
+
+	if ( status == 0 )
+	{
+		free( toggleButton );
+
+		return NULL;
+	}
+
+
+	// Initialize the toggleButton specific parts
+	toggleButton->isSet = 0;
+
+	winToggleButton->paintHandler             = toggleButton_paintHandler;
+	winToggleButton->mouseReleaseEventHandler = toggleButton_mouseReleaseEventHandler;
+
+
+	//
+	return toggleButton;
+}
+
+void toggleButton_free ( struct _ToggleButton* toggleButton )
+{
+	// TODO
+}
+
+
+// ------------------------------------------------------------------------------------------
+
+void toggleButton_paintHandler ( struct _Window* winToggleButton )
+{
+	struct _ToggleButton* toggleButton;
+	uint32_t              color;
+
+	toggleButton = ( struct _ToggleButton* ) winToggleButton;
+
+
+	if ( toggleButton->isSet == 1 )
+	{
+		color = TOGGLEBTN_SET_COLOR;
+	}
+	else
+	{
+		color = TOGGLEBTN_COLOR;
+	}
+
+	context_fillRect(
+
+		winToggleButton->context,
+		0,
+		0,
+		winToggleButton->width,
+		winToggleButton->height,
+		color
+	);
+}
+
+
+// ------------------------------------------------------------------------------------------
+
+void toggleButton_mouseReleaseEventHandler ( struct _Window* winToggleButton, int relMouseX, int relMouseY )
+{
+	struct _ToggleButton* toggleButton;
+
+	toggleButton = ( struct _ToggleButton* ) winToggleButton;
+
+	// Toggle button state
+	if ( toggleButton->isSet == 1 )
+	{
+		toggleButton->isSet = 0;
+	}
+	else
+	{
+		toggleButton->isSet = 1;
+	}
 }
 
 
