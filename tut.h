@@ -1,5 +1,11 @@
 // ------------------------------------------------------------------------------------------
 
+#define FAIL    0  // TODO
+#define SUCCESS 1
+
+
+// ------------------------------------------------------------------------------------------
+
 struct _List {
 
 	int               nItems;
@@ -169,12 +175,14 @@ int             window_getAbsoluteYPosition            ( struct _Window* window 
 struct _Window* window_createChildWindow               ( struct _Window* window, int x, int y, int width, int height, uint16_t flags );
 void            window_appendChildWindow               ( struct _Window* window, struct _Window* childWindow );
 struct _List*   window_getChildWindowsAbove            ( struct _Window* window, struct _Window* btmWindow );
-void            window_createClippingRegion            ( struct _Window* window, int inRecursion );
-void            window_paint                           ( struct _Window* window );
+void            window_createClippingRegion            ( struct _Window* window, struct _List* dirtyRects, int inRecursion );
+void            window_paint                           ( struct _Window* window, struct _List* dirtyRects, int paintChildren );
 void            window_defaultPaintHandler             ( struct _Window* window );
 void            window_paintDecoration                 ( struct _Window* window );
 void            window_updateDecoration                ( struct _Window* window );
+void            window_invalidate                      ( struct _Window* window, int x, int y, int width, int height );
 void            window_raiseWindow                     ( struct _Window* window );
+void            window_moveWindow                      ( struct _Window* window, int newX, int newY );
 void            window_dragChildWindow                 ( struct _Window* window, int mouseX, int mouseY );
 void            window_handleMouseEvent                ( struct _Window* window, struct _MouseState* mouseState, int relMouseX, int relMouseY );
 void            window_defaultMousePressEventHandler   ( struct _Window* window, int relMouseX, int relMouseY );

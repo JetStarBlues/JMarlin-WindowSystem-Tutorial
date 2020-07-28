@@ -95,7 +95,7 @@ int list_appendNode ( struct _List* list, void* value )
 
 	if ( newNode == NULL )
 	{
-		return 0;
+		return FAIL;
 	}
 
 
@@ -126,7 +126,7 @@ int list_appendNode ( struct _List* list, void* value )
 	//
 	list->nItems += 1;
 
-	return 1;
+	return SUCCESS;
 }
 
 void* list_removeNode ( struct _List* list, int index )
@@ -1094,7 +1094,7 @@ struct _Window* window_new (
 	// Initialize the window
 	status = window_init( window, x, y, width, height, flags, context );
 
-	if ( status == 0 )
+	if ( status == FAIL )
 	{
 		free( window );
 
@@ -1128,7 +1128,7 @@ int window_init (
 
 	if ( window->children == NULL )
 	{
-		return 0;
+		return FAIL;
 	}
 
 	window->parent                   = NULL;
@@ -1142,7 +1142,7 @@ int window_init (
 	window->mouseReleaseEventHandler = window_defaultMouseReleaseEventHandler;
 	window->mouseIsPressedHandler    = window_defaultMouseIsPressedHandler;
 
-	return 1;
+	return SUCCESS;
 }
 
 void window_free ( struct _Window* window )
@@ -1153,6 +1153,9 @@ void window_free ( struct _Window* window )
 
 // ------------------------------------------------------------------------------------------
 
+/* Screen-space is absolute (position of object in screen/display)
+   Window-space is relative (position of object in parent window)
+*/
 int window_getAbsoluteXPosition ( struct _Window* window )
 {
 	if ( window->parent )
@@ -1204,7 +1207,7 @@ struct _Window* window_createChildWindow (
 	//
 	status = list_appendNode( window->children, ( void* ) childWindow );
 
-	if ( status == 0 )
+	if ( status == FAIL )
 	{
 		free( childWindow );
 
@@ -1225,7 +1228,7 @@ void window_appendChildWindow ( struct _Window* window, struct _Window* childWin
 	//
 	status = list_appendNode( window->children, ( void* ) childWindow );
 
-	if ( status == 0 )
+	if ( status == FAIL )
 	{
 		return;
 	}
@@ -1413,17 +1416,19 @@ Let's follow path of a call to 'window_paint( win0 )':
         └── intersectClipRect decoration win3
 */
 
-void window_createClippingRegion ( struct _Window* window, int inRecursion )
+void window_createClippingRegion ( struct _Window* window, struct _List* dirtyRects, int inRecursion )
 {
 	int               windowX;
 	int               windowY;
 	struct _ListNode* node;
-	struct _Rect*     rect;
-	struct _Rect      rect2;
+	struct _Rect*     winRect;
+	struct _Rect      rect;
 	struct _List*     siblingWindows;
 	struct _Window*   siblingWindow;
 	int               siblingWindowX;
 	int               siblingWindowY;
+	struct _Rect*     dirtyRect;
+	struct _Rect*     dirtyRectCopy;
 
 
 	if ( DEBUG_WINDOW_CLIP )
@@ -1437,7 +1442,7 @@ void window_createClippingRegion ( struct _Window* window, int inRecursion )
 	windowY = window_getAbsoluteYPosition( window );
 
 	/* If the window uses a window decoration and we are recursing,
-	   limit the clipping area to the area inside the decoration,
+	   limit the clipping-region to the area inside the decoration,
 	   so that child windows don't get drawn over the decoration.
 	*/
 	if ( inRecursion && ( ( window->flags & WIN_FLAG_NO_DECORATION ) == 0 ) )
@@ -1445,7 +1450,7 @@ void window_createClippingRegion ( struct _Window* window, int inRecursion )
 		windowX += WIN_BORDER_WIDTH;     // exclude border
 		windowY += WIN_TITLEBAR_HEIGHT;  // exclude title bar
 
-		rect = rect_new(
+		winRect = rect_new(
 
 			windowY,
 			windowX,
@@ -1463,7 +1468,7 @@ void window_createClippingRegion ( struct _Window* window, int inRecursion )
 	*/
 	else
 	{
-		rect = rect_new(
+		winRect = rect_new(
 
 			windowY,
 			windowX,
@@ -1473,37 +1478,85 @@ void window_createClippingRegion ( struct _Window* window, int inRecursion )
 	}
 
 
-	/* Add "full" window to clipping-region.
+	/* If window has no parent, add "whole" window to clipping-region
+	   and return.
+
 	   This is where our recursion finally halts.
 	*/
 	if ( window->parent == NULL )
 	{
-		context_addClipRect( window->context, rect );
-
-		if ( DEBUG_WINDOW_CLIP )
+		/*if ( window->context->clipRects->nItems != 0 )
 		{
-			printf( "addClipRect desktop\n" );
+			printf( "ERROR, context->clipRects should be empty\n" );
+		}*/
+
+		/* If a dirty-region is specified, add only the parts of the
+		   window which lie within (intersect) the dirty-region.
+		*/
+		if ( dirtyRects != NULL )
+		{
+			// Copy the dirtyRects and put them in the clipping-region
+			node = dirtyRects->rootNode;
+
+			while ( node != NULL )
+			{
+				dirtyRect = ( struct _Rect* ) node->value;
+
+				//
+				dirtyRectCopy = rect_new(
+
+					dirtyRect->top,
+					dirtyRect->left,
+					dirtyRect->bottom,
+					dirtyRect->right
+				);
+
+				/* By the time we reach here (root window), context->clipRects
+				   should be empty. Thus the dirty rects will be the only thing
+				   present (and the clipping-region will be equivlent to the
+				   dirty-region)
+				*/
+				context_addClipRect( window->context, dirtyRectCopy );
+
+				//
+				node = node->next;
+			}
+
+			// Set clipping region as union of window and dirty-region
+			context_intersectClipRect( window->context, winRect );
 		}
 
+		// Add "whole" window without clipping
+		else
+		{
+			context_addClipRect( window->context, winRect );
+
+			if ( DEBUG_WINDOW_CLIP )
+			{
+				printf( "addClipRect desktop\n" );
+			}
+		}
+
+		// Stop recursion
 		return;
 	}
 
 
 	// Get ancestors clipping-region?
-	window_createClippingRegion( window->parent, 1 );
+	window_createClippingRegion( window->parent, dirtyRects, 1 );
 
 	/* Set the clipping-region as the union of the
 	   ancestors' clipping-region and the window...
 	   i.e. the part of the window that is not occluded by its ancestors...
 	*/
-	context_intersectClipRect( window->context, rect );
+	context_intersectClipRect( window->context, winRect );
 
 	if ( DEBUG_WINDOW_CLIP )
 	{
 		printf( "intersectClipRect ancestors of win%d\n", getWinName( window ) );
 	}
 
-	free( rect );
+	free( winRect );
 
 
 	/* Remove portions of the window which are hidden/occluded
@@ -1521,12 +1574,12 @@ void window_createClippingRegion ( struct _Window* window, int inRecursion )
 		siblingWindowX = window_getAbsoluteXPosition( siblingWindow );
 		siblingWindowY = window_getAbsoluteYPosition( siblingWindow );
 
-		rect2.top    = siblingWindowY;
-		rect2.left   = siblingWindowX;
-		rect2.bottom = siblingWindowY + siblingWindow->height - 1;
-		rect2.right  = siblingWindowX + siblingWindow->width - 1;
+		rect.top    = siblingWindowY;
+		rect.left   = siblingWindowX;
+		rect.bottom = siblingWindowY + siblingWindow->height - 1;
+		rect.right  = siblingWindowX + siblingWindow->width - 1;
 
-		context_subtractClipRect( window->context, &rect2 );
+		context_subtractClipRect( window->context, &rect );
 
 		//
 		if ( DEBUG_WINDOW_CLIP )
@@ -1541,7 +1594,7 @@ void window_createClippingRegion ( struct _Window* window, int inRecursion )
 	list_free( siblingWindows );
 }
 
-void window_paint ( struct _Window* window )
+void window_paint ( struct _Window* window, struct _List* dirtyRects, int paintChildren )
 {
 	/* Setup is the same for all windows.
 	   Once finished, we call the window's unique paintHandler.
@@ -1553,6 +1606,8 @@ void window_paint ( struct _Window* window )
 	int               childWindowY;
 	struct _Rect      rect;
 	struct _Window*   childWindow;
+	struct _ListNode* node2;
+	struct _Rect*     dirtyRect;
 
 
 	if ( DEBUG_WINDOW_CLIP )
@@ -1573,10 +1628,11 @@ void window_paint ( struct _Window* window )
 
 
 	/* Create a clipping-region representing the (visible) parts
-	   of the window which are not hidden/occluded by its ancestors
-	   or siblings
+	   of the window which are:
+	    1) not hidden/occluded by its ancestors or siblings,
+	    2) are within the dirty-region
 	*/
-	window_createClippingRegion( window, 0 );
+	window_createClippingRegion( window, dirtyRects, 0 );
 
 
 	/* If the window uses a window decoration, paint it.
@@ -1663,14 +1719,65 @@ void window_paint ( struct _Window* window )
 
 
 	// Paint children
+	if ( paintChildren == 0 )
+	{
+		return;
+	}
+
 	node = window->children->rootNode;
 
 	while ( node != NULL )
 	{
 		childWindow = ( struct _Window* ) node->value;
 
-		window_paint( childWindow );
 
+		// Check if any part of the child lies inside the dirty-region
+		if ( dirtyRects != NULL )
+		{
+			// Look for a dirtyRect that intersects with the child
+			node2 = dirtyRects->rootNode;
+
+			while ( node2 != NULL )
+			{
+				dirtyRect = ( struct _Rect* ) node2->value;
+
+				//
+				childWindowX = window_getAbsoluteXPosition( childWindow );
+				childWindowY = window_getAbsoluteYPosition( childWindow );
+
+				rect.top    = childWindowY;
+				rect.left   = childWindowX;
+				rect.bottom = childWindowY + childWindow->height - 1;
+				rect.right  = childWindowX + childWindow->width - 1;
+
+				// Found one, stop checking
+				if ( rect_rectsIntersect( &rect, dirtyRect ) )
+				{
+					break;
+				}
+
+				//
+				node2 = node2->next;
+			}
+
+
+			/* If no part of the child is within the dirty-region,
+			   skip drawing the child
+			*/
+			if ( node2 == NULL )
+			{
+				node = node->next;
+
+				continue;  // evaluate next child
+			}
+		}
+
+
+		// Request child to draw its dirty areas
+		window_paint( childWindow, dirtyRects, 1 );
+
+
+		//
 		node = node->next;
 	}
 }
@@ -1781,15 +1888,87 @@ void window_updateDecoration ( struct _Window* window )
 		return;
 	}
 
+	// Reset
+	context_clearClipRects( window->context );
+	window->context->xOffset = 0;
+	window->context->yOffset = 0;
+
 	// Create a clipping-region representing the visible parts of the window
-	window_createClippingRegion( window, 0 );
-	// window_createClippingRegion( window, 0, NULL );
+	window_createClippingRegion( window, NULL, 0 );
 
 	// Redraw the decoration
 	window_paintDecoration( window );
+}
+
+
+// ------------------------------------------------------------------------------------------
+
+/* Request repaint of a part of the window.
+   'x' and 'y' are window-relative positions.
+*/
+void window_invalidate ( struct _Window* window, int x, int y, int width, int height )
+{
+	int           absX;
+	int           absY;
+	struct _Rect* dirtyRect;
+	struct _List* dirtyRects;
+	int           status;
+
+
+	// Convert position to screen-relative
+	absX = window_getAbsoluteXPosition( window );
+	absY = window_getAbsoluteYPosition( window );
+
+	x += absX;
+	y += absY;
+
+
+	// Create a rect representing the dirty-region
+	dirtyRect = rect_new(
+
+		y,
+		x,
+		y + height - 1,
+		x + width - 1
+	);
+
+	if ( dirtyRect == NULL )
+	{
+		goto cleanup;
+	}
+
+
+	// Create a new list and append the rect
+	dirtyRects = list_new();
+
+	if ( dirtyRects == NULL )
+	{
+		goto cleanup;
+	}
+
+	status = list_appendNode( dirtyRects, dirtyRect );
+
+	if ( status == FAIL )
+	{
+		goto cleanup;
+	}
+
+
+	// Repaint the window with the specified dirty-region
+	window_paint( window, dirtyRects, 0 );
+
 
 	//
-	context_clearClipRects( window->context );
+	cleanup:
+
+		if ( dirtyRect != NULL )
+		{
+			free( dirtyRect );		
+		}
+		if ( dirtyRects != NULL )
+		{
+			list_free( dirtyRects );
+		}
 }
 
 
@@ -1856,8 +2035,7 @@ void window_raiseWindow ( struct _Window* window )
 	/* Redraw window (to paint parts that were previously hidden
 	   and reflect new active state)
 	*/
-	window_paint( window );
-	// window_paint( window, NULL, 1 );
+	window_paint( window, NULL, 1 );
 
 
 	// Redraw decoration of lastActiveChild, to reflect new inactive state
@@ -1867,9 +2045,113 @@ void window_raiseWindow ( struct _Window* window )
 	}
 }
 
+/*
+    -------- oldPos
+   |dddddddd|
+   |ddd -------- newPos
+   |ddd|wwwwwwww|
+   |ddd|wwwwwwww|   w - paint window (we assume raised to top when move)
+    ---|wwwwwwww|   d - paint dirty-region left behind
+       |wwwwwwww|
+        --------
+*/
 void window_moveWindow ( struct _Window* window, int newX, int newY )
 {
-	//
+	int               oldX;
+	int               oldY;
+	int               absNewX;
+	int               absNewY;
+	struct _Rect      rect;
+	struct _List*     emptyList;
+	struct _List*     dirtyRects;
+	struct _List*     dirtyWindows;
+	struct _ListNode* node;
+	struct _Window*   siblingWindow;
+
+	// If a window is moved, it must become the top-most window
+	window_raiseWindow( window );
+
+
+	// Get window's currently visible area
+	context_clearClipRects( window->context );  // reset
+	window_createClippingRegion( window, NULL, 0 );
+
+
+	// Temporarily update the window's position
+	oldX = window->x;
+	oldY = window->y;
+
+	window->x = newX;
+	window->y = newY;
+
+
+	// Calculate the bounds of the moved window
+	absNewX = window_getAbsoluteXPosition( window );
+	absNewY = window_getAbsoluteYPosition( window );
+
+	rect.top    = absNewY;
+	rect.left   = absNewX;
+	rect.bottom = absNewY + window->height - 1;
+	rect.right  = absNewX + window->width - 1;
+
+
+	// Reset the window's position
+	window->x = oldX;
+	window->y = oldY;
+
+
+	// Get dirty-region by subtracting the new location of the window
+	context_subtractClipRect( window->context, &rect );
+
+
+	// Grab the list of dirtyRects
+	emptyList = list_new();
+
+	if ( emptyList == NULL )
+	{
+		return;
+	}
+
+	dirtyRects                 = window->context->clipRects;
+	window->context->clipRects = emptyList;
+
+
+	// Get siblings we occluded before the move
+	dirtyWindows = window_getChildWindowsBelow( window->parent, window );
+
+
+	// Update window's position (for real)
+	window->x = newX;
+	window->y = newY;
+
+
+	// Repaint dirty-region of previously occluded siblings
+	node = dirtyWindows->rootNode;
+
+	while ( node != NULL )
+	{
+		siblingWindow = ( struct _Window* ) node->value;
+
+		window_paint( siblingWindow, dirtyRects, 1 );
+
+		node = node->next;
+	}
+
+
+	/* Repaint dirty-region of parent.
+	   Since we have already updated the parent's dirty children,
+	   we call 'window_paint' with 'paintChildren' set to false.
+	*/
+	window_paint( window->parent, dirtyRects, 0 );
+
+
+	// Paint the window itself
+	window_paint( window, NULL, 1 );
+
+
+	// Cleanup
+	list_free( dirtyWindows );
+	list_free( dirtyRects );
 }
 
 
@@ -1882,15 +2164,12 @@ void window_dragChildWindow ( struct _Window* window, int relMouseX, int relMous
 		/* Applying the offset makes sure that the corner of the
 		   window does not suddenly snap to the mouse location
 		*/
-		window->dragTarget->x = relMouseX - window->dragOffsetX;
-		window->dragTarget->y = relMouseY - window->dragOffsetY;
-
-		/*window_moveWindow(
+		window_moveWindow(
 
 			window->dragTarget,
 			relMouseX - window->dragOffsetX,
 			relMouseY - window->dragOffsetY
-		);*/
+		);
 	}
 }
 
@@ -2113,7 +2392,7 @@ struct _Desktop* desktop_new ( struct _Context* context )
 		context
 	);
 
-	if ( status == 0 )
+	if ( status == FAIL )
 	{
 		free( desktop );
 
@@ -2166,9 +2445,6 @@ void desktop_handleMouseEvent ( struct _Desktop* desktop, struct _MouseState* mo
 
 	// Handle mouse
 	window_handleMouseEvent( winDesktop, mouseState, mouseState->mouseX, mouseState->mouseY );
-
-	// Update screen to reflect changes mouse-event may have caused
-	window_paint( winDesktop );
 
 	// Draw the mouse
 	cursor_paint( winDesktop->context, mouseState->mouseX, mouseState->mouseY );
@@ -2317,7 +2593,7 @@ void tut_init ( void )
 
 
 	// Do the initial paint
-	window_paint( ( struct _Window* ) gDesktop );
+	window_paint( ( struct _Window* ) gDesktop, NULL, 1 );
 
 
 	// Install mouse callback

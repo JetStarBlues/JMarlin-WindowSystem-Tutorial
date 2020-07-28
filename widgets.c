@@ -43,7 +43,7 @@ struct _ToggleButton* toggleButton_new ( int x, int y, int w, int h )
 		NULL
 	);
 
-	if ( status == 0 )
+	if ( status == FAIL )
 	{
 		free( toggleButton );
 
@@ -116,4 +116,13 @@ void toggleButton_mouseReleaseEventHandler ( struct _Window* winToggleButton, in
 	{
 		toggleButton->isSet = 1;
 	}
+
+	// Request a repaint
+	window_invalidate(
+
+		winToggleButton,
+		0, 0,
+		winToggleButton->width,
+		winToggleButton->height
+	);
 }
