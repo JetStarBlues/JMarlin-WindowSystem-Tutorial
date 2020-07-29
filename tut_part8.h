@@ -39,7 +39,6 @@ struct _Context {
 	int yOffset;
 
 	struct _List* clipRects;
-	// int           clippingEnabled;
 };
 
 
@@ -111,8 +110,8 @@ struct _Desktop {
 	struct _Window window;  // "inherit" window class
 
 	// mouse
-	int mouseX;
-	int mouseY;
+	// int mouseX;
+	// int mouseY;
 };
 
 
@@ -127,8 +126,6 @@ struct _MouseState {
 	int mouseReleaseEvent;  // set once, when button transitions from pressed to released
 	int mouseIsPressed;     // set for all frames between press (inclusive) and release (exclusive)
 };
-
-
 
 
 
@@ -183,7 +180,7 @@ void            window_paint                           ( struct _Window* window,
 void            window_defaultPaintHandler             ( struct _Window* window );
 void            window_paintDecoration                 ( struct _Window* window );
 void            window_updateDecoration                ( struct _Window* window );
-void            window_invalidate                      ( struct _Window* window, int x, int y, int width, int height, int paintChildren );
+void            window_invalidate                      ( struct _Window* window, int x, int y, int width, int height );
 void            window_raiseWindow                     ( struct _Window* window );
 void            window_moveWindow                      ( struct _Window* window, int newX, int newY );
 void            window_dragChildWindow                 ( struct _Window* window, int mouseX, int mouseY );

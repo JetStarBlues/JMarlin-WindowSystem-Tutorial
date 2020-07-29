@@ -123,6 +123,7 @@ void toggleButton_mouseReleaseEventHandler ( struct _Window* winToggleButton, in
 		winToggleButton,
 		0, 0,
 		winToggleButton->width,
-		winToggleButton->height
+		winToggleButton->height,
+		0
 	);
 }

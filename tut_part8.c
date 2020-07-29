@@ -11,14 +11,21 @@
 #include "widgets.h"
 
 
+/* To visualize debug properly:
+    1) Comment out updates in 'tut_main' loop
+    2) Change arg of 'window_paint' in 'tut_init' to desired window
+    3) Comment out 'window->paintHandler( window )' in 'window_paint'
+*/
+#define DEBUG_WINDOW_CLIP 0
+
 struct _Desktop*    gDesktop;  // hmmm...
 struct _Context*    gContext;  // hmmm...
 struct _MouseState* gMouseState;
 
-// struct _Window* win0;
-// struct _Window* win1;
-// struct _Window* win2;
-// struct _Window* win3;
+struct _Window* win0;
+struct _Window* win1;
+struct _Window* win2;
+struct _Window* win3;
 
 
 
@@ -651,8 +658,6 @@ struct _Context* context_new ( int width, int height )
 		return NULL;
 	}
 
-	// context->clippingEnabled = 0;
-
 	return context;
 }
 
@@ -905,9 +910,6 @@ void context_strokeRect (
 	);
 }
 
-
-// ------------------------------------------------------------------------------------------
-
 // Draw only the portion of the rect that is within 'boundary'
 void context__boundedFillRect (
 
@@ -1012,7 +1014,7 @@ void context_fillRect (
 	struct _ListNode* node;
 	struct _Rect*     clipRect;
 
-	// If there are clipping rects, draw the rect clipped to each of them
+	// If there are clipping rects, draw the rect clipped to each? of them
 	if ( context->clipRects->nItems > 0 )
 	{
 		node = context->clipRects->rootNode;
@@ -1033,7 +1035,7 @@ void context_fillRect (
 	*/
 }
 
-// Note: does not clip
+// TODO: Does not clip
 void context_setPixel (
 
 	struct _Context* context,
@@ -1368,6 +1370,25 @@ struct _List* window_getChildWindowsBelow ( struct _Window* window, struct _Wind
 
 // ------------------------------------------------------------------------------------------
 
+int getWinName ( struct _Window* window )  // temporary debug functions
+{
+	if      ( window == win0 ) { return 0; }
+	else if ( window == win1 ) { return 1; }
+	else if ( window == win2 ) { return 2; }
+	else if ( window == win3 ) { return 3; }
+	else                       { return 99; }  // desktop
+}
+
+uint32_t getDebugColor ( struct _Window* window )  // temporary debug functions
+{
+	if      ( window == win0 ) { return 0x081820FF; }
+	else if ( window == win1 ) { return 0x346856FF; }
+	else if ( window == win2 ) { return 0x88C070FF; }
+	else if ( window == win3 ) { return 0xE0F8D0FF; }
+	else if ( window == ( struct _Window* ) gDesktop ) { return 0x764462FF; }
+	else                       { return 0x00FF00FF; }
+}
+
 /*
 TODO: Don't quite understand tree traversal of this function.
 
@@ -1394,6 +1415,7 @@ Let's follow path of a call to 'window_paint( win0 )':
         │   └── intersectClipRect ancestors of win3
         └── intersectClipRect decoration win3
 */
+
 void window_createClippingRegion ( struct _Window* window, struct _List* dirtyRects, int inRecursion )
 {
 	int               windowX;
@@ -1407,6 +1429,12 @@ void window_createClippingRegion ( struct _Window* window, struct _List* dirtyRe
 	int               siblingWindowY;
 	struct _Rect*     dirtyRect;
 	struct _Rect*     dirtyRectCopy;
+
+
+	if ( DEBUG_WINDOW_CLIP )
+	{
+		printf( "window_createClippingRegion win%d\n", getWinName( window ) );
+	}
 
 
 	// Create a rectangle representing the window
@@ -1502,6 +1530,11 @@ void window_createClippingRegion ( struct _Window* window, struct _List* dirtyRe
 		else
 		{
 			context_addClipRect( window->context, winRect );
+
+			if ( DEBUG_WINDOW_CLIP )
+			{
+				printf( "addClipRect desktop\n" );
+			}
 		}
 
 		// Stop recursion
@@ -1517,6 +1550,11 @@ void window_createClippingRegion ( struct _Window* window, struct _List* dirtyRe
 	   i.e. the part of the window that is not occluded by its ancestors...
 	*/
 	context_intersectClipRect( window->context, winRect );
+
+	if ( DEBUG_WINDOW_CLIP )
+	{
+		printf( "intersectClipRect ancestors of win%d\n", getWinName( window ) );
+	}
 
 	free( winRect );
 
@@ -1544,6 +1582,12 @@ void window_createClippingRegion ( struct _Window* window, struct _List* dirtyRe
 		context_subtractClipRect( window->context, &rect );
 
 		//
+		if ( DEBUG_WINDOW_CLIP )
+		{
+			printf( "subtractClipRect sibling win%d\n", getWinName( siblingWindow ) );
+		}
+
+		//
 		node = node->next;
 	}
 
@@ -1564,6 +1608,12 @@ void window_paint ( struct _Window* window, struct _List* dirtyRects, int paintC
 	struct _Window*   childWindow;
 	struct _ListNode* node2;
 	struct _Rect*     dirtyRect;
+
+
+	if ( DEBUG_WINDOW_CLIP )
+	{
+		printf( "\nwindow_paint win%d\n", getWinName( window ) );
+	}
 
 
 	// Reset
@@ -1614,6 +1664,12 @@ void window_paint ( struct _Window* window, struct _List* dirtyRects, int paintC
 		rect.right  = windowX + window->width - ( 2 * WIN_BORDER_WIDTH ) - 1;
 
 		context_intersectClipRect( window->context, &rect );
+
+
+		if ( DEBUG_WINDOW_CLIP )
+		{
+			printf( "intersectClipRect decoration win%d\n", getWinName( window ) );
+		}
 	}
 
 
@@ -1638,7 +1694,19 @@ void window_paint ( struct _Window* window, struct _List* dirtyRects, int paintC
 		context_subtractClipRect( window->context, &rect );
 
 		//
+		if ( DEBUG_WINDOW_CLIP )
+		{
+			printf( "subtractClipRect child win%d\n", getWinName( childWindow ) );
+		}
+
+		//
 		node = node->next;
+	}
+
+
+	if ( DEBUG_WINDOW_CLIP )
+	{
+		debug_drawClipRects( window->context, 0xFFFF00FF, 1, getDebugColor( window ) );
 	}
 
 
@@ -1838,7 +1906,7 @@ void window_updateDecoration ( struct _Window* window )
 /* Request repaint of a part of the window.
    'x' and 'y' are window-relative positions.
 */
-void window_invalidate ( struct _Window* window, int x, int y, int width, int height, int paintChildren )
+void window_invalidate ( struct _Window* window, int x, int y, int width, int height )
 {
 	int           absX;
 	int           absY;
@@ -1887,7 +1955,7 @@ void window_invalidate ( struct _Window* window, int x, int y, int width, int he
 
 
 	// Repaint the window with the specified dirty-region
-	window_paint( window, dirtyRects, paintChildren );
+	window_paint( window, dirtyRects, 0 );
 
 
 	//
@@ -2276,48 +2344,13 @@ void window_defaultMouseIsPressedHandler ( struct _Window* window, int relMouseX
    ...
    ========================================================================================== */
 
-#define CURSOR_WIDTH   3
-#define CURSOR_HEIGHT  3
-#define CURSOR_BMPSIZE ( CURSOR_WIDTH * CURSOR_HEIGHT )
-
-#define c_ 0x00000000  // clear
-#define c1 0xFF0000FF
-#define c2 0xFFFFFFFF
-
-uint32_t cursorBitmap [ CURSOR_BMPSIZE ] = {
-
-	c_, c1, c_,
-	c1, c2, c1,
-	c_, c1, c_,
-};
-
-
-// ------------------------------------------------------------------------------------------
-
-void cursor_paint ( struct _Context* context, int mouseX, int mouseY )
+void cursor_paint ( struct _Context* context, int x, int y )
 {
-	int      x;
-	int      y;
-	int      idx;
-	uint32_t color;
-
-	idx = 0;
-
-	for ( y = 0; y < CURSOR_HEIGHT; y += 1 )
-	{
-		for ( x = 0; x < CURSOR_WIDTH; x += 1 )
-		{
-			color = cursorBitmap[ idx ];
-
-			// Draw only non-transparent pixels
-			if ( ( color & 0x000000FF ) != 0 )
-			{
-				context_setPixel( context, mouseX + x, mouseY + y, color );
-			}
-
-			idx += 1;
-		}
-	}
+	context_setPixel( context, x,     y,     0xFFFFFFFF );
+	context_setPixel( context, x - 1, y,     0xFF0000FF );
+	context_setPixel( context, x + 1, y,     0xFF0000FF );
+	context_setPixel( context, x,     y + 1, 0xFF0000FF );
+	context_setPixel( context, x,     y - 1, 0xFF0000FF );
 }
 
 
@@ -2368,9 +2401,8 @@ struct _Desktop* desktop_new ( struct _Context* context )
 
 
 	// Initialize the desktop specific parts
-	desktop->mouseX = 0;
-	desktop->mouseY = 0;
-
+	// desktop->mouseX = winDesktop->width / 2;
+	// desktop->mouseY = winDesktop->height / 2;
 	winDesktop->paintHandler = desktop_paintHandler;  // override the default paintHandler
 
 
@@ -2407,32 +2439,15 @@ void desktop_handleMouseEvent ( struct _Desktop* desktop, struct _MouseState* mo
 
 	winDesktop = ( struct _Window* ) desktop;
 
+	// Save mouse location (why?)
+	// desktop->mouseX = mouseState->mouseX;
+	// desktop->mouseY = mouseState->mouseY;
 
 	// Handle mouse
 	window_handleMouseEvent( winDesktop, mouseState, mouseState->mouseX, mouseState->mouseY );
 
-
 	// Draw the mouse
-	{
-		// repaint dirty-region created
-		window_invalidate(
-
-			winDesktop,
-			desktop->mouseX,  // old position
-			desktop->mouseY,  // old position
-			CURSOR_WIDTH,
-			CURSOR_HEIGHT,
-			1                 // bubble repaint to all (affected) windows
-		);
-
-		// paint cursor at new location
-		cursor_paint( winDesktop->context, mouseState->mouseX, mouseState->mouseY );
-	}
-
-
-	// Updated saved mouse location
-	desktop->mouseX = mouseState->mouseX;
-	desktop->mouseY = mouseState->mouseY;
+	cursor_paint( winDesktop->context, mouseState->mouseX, mouseState->mouseY );
 }
 
 
@@ -2533,10 +2548,10 @@ void debug_drawClipRects ( struct _Context* context, uint32_t strokeColor, int s
 
 void tut_init ( void )
 {
-	struct _Window*       win0;
-	struct _Window*       win1;
-	struct _Window*       win2;
-	struct _Window*       win3;
+	// struct _Window* win0;
+	// struct _Window* win1;
+	// struct _Window* win2;
+	// struct _Window* win3;
 	struct _ToggleButton* btn;
 
 
