@@ -8,6 +8,7 @@
 #include "olcPGE_min.h"
 #include "params.h"
 #include "tut.h"
+#include "fonts.h"
 #include "widgets.h"
 
 
@@ -916,84 +917,58 @@ void context__boundedFillRect (
 	int              y,
 	int              width,
 	int              height,
-	struct _Rect*    boundary,
-	uint32_t         color
+	uint32_t         color,
+	struct _Rect*    boundary
 )
 {
-	int curX;
-	int maxX;
-	int maxY;
-	int idx;
+	struct _Rect* visibleRegion;
+	struct _Rect  rect;
+	int           visibleWidth;
+	int           visibleHeight;
+	int           idx;
+	int           visY;
+	int           visX;
+
 
 	// Translate the rectangle's coordinates by the context's translation
 	x += context->xOffset;
 	y += context->yOffset;
 
 
-	// Constrain bounds
+	//
+	rect.top    = y;
+	rect.left   = x;
+	rect.bottom = y + height - 1;
+	rect.right  = x + width - 1;
+
+
+	// If the rectangle does not lie within the boundary, nothing to do
+	if ( rect_rectsIntersect( &rect, boundary ) == 0 )
 	{
-		maxX = x + width;
-		maxY = y + height;
-
-		// Constrain to bounds of context (screen)
-		if ( maxX > context->width )
-		{
-			maxX = context->width;
-		}
-
-		if ( maxY > context->height )
-		{
-			maxY = context->height;
-		}
-
-		if ( x < 0 )
-		{
-			x = 0;
-		}
-
-		if ( y < 0 )
-		{
-			y = 0;
-		}
-
-		// Constrain to bounds of clipRect
-		if ( boundary != NULL )
-		{
-			if ( maxX > ( boundary->right + 1 ) )
-			{
-				maxX = boundary->right + 1;
-			}
-
-			if ( maxY > boundary->bottom + 1 )
-			{
-				maxY = boundary->bottom + 1;
-			}
-
-			if ( x < boundary->left )
-			{
-				x = boundary->left;
-			}
-
-			if ( y < boundary->top )
-			{
-				y = boundary->top;
-			}
-		}
+		return;
 	}
 
 
-	// Draw the rectangle
-	while ( y < maxY )
+	// Get the visible part of the rectangle
+	visibleRegion = rect_getIntersection( &rect, boundary );
+	visibleWidth  = rect_getWidth( visibleRegion );
+	visibleHeight = rect_getHeight( visibleRegion );
+
+
+	// Paint the visible part of the rectangle
+	for ( visY = visibleRegion->top; visY < visibleRegion->top + visibleHeight; visY += 1 )
 	{
-		for ( curX = x; curX < maxX; curX += 1 )
+		for ( visX = visibleRegion->left; visX < visibleRegion->left + visibleWidth; visX += 1 )
 		{
-			idx = ( y * context->width ) + curX;
+			idx = ( visY * context->width ) + visX;
 
 			context->frameBuffer[ idx ] = color;
 		}
-
-		y += 1;
 	}
+
+
+	//
+	free( visibleRegion );
 }
 
 /* Since all our drawing primitives ultimately call this function,
@@ -1021,7 +996,7 @@ void context_fillRect (
 		{
 			clipRect = ( struct _Rect* ) node->value;
 
-			context__boundedFillRect( context, x, y, width, height, clipRect, color );
+			context__boundedFillRect( context, x, y, width, height, color, clipRect );
 
 			node = node->next;
 		}
@@ -1032,6 +1007,9 @@ void context_fillRect (
 	   thus nothing is visible. So we draw nothing.
 	*/
 }
+
+
+// ------------------------------------------------------------------------------------------
 
 // Note: does not clip
 void context_setPixel (
@@ -1044,7 +1022,7 @@ void context_setPixel (
 {
 	int idx;
 
-	// Check bounds of context (screen)
+	// Check bounds of screen
 	if (
 
 		( x < 0 )                ||
@@ -1059,6 +1037,145 @@ void context_setPixel (
 	idx = ( y * context->width ) + x;
 
 	context->frameBuffer[ idx ] = color;
+}
+
+
+// ------------------------------------------------------------------------------------------
+
+static char* curFont       = g_8x11_font__Gohu;
+static int   curFontWidth  = 8;
+static int   curFontHeight = 11;
+
+void context__boundedDrawChar ( struct _Context* context, char ch, int x, int y, uint32_t color, struct _Rect* boundary )
+{
+	struct _Rect* visibleRegion;
+	struct _Rect  charRect;
+	int           visibleWidth;
+	int           visibleHeight;
+	int           idx;
+	int           visY;
+	int           visX;
+	int           visibleColOffset;
+	int           visibleRowOffset;
+	char*         bitmap;
+	char          bitmapRow;
+	unsigned char pixelMask;
+	int           row;
+
+
+	// Translate the character's coordinates by the context's translation
+	x += context->xOffset;
+	y += context->yOffset;
+
+
+	//
+	charRect.top    = y;
+	charRect.left   = x;
+	charRect.bottom = y + curFontHeight - 1;
+	charRect.right  = x + curFontWidth - 1;
+
+
+	// If the character does not lie within the boundary, nothing to do
+	if ( rect_rectsIntersect( &charRect, boundary ) == 0 )
+	{
+		return;
+	}
+
+
+	/* Get the visible part of the character
+
+	     . x . . . . . .
+	     . x . . . . . .
+	     . x . . . . . .
+	     . x x x x . . .
+	           _________ < visibleRowOffset
+	     . x .|. x . . .|
+	     . x .|. x . . .|
+	     . x .|. x . . .|
+	     . . .|. . . . .|
+	          |_________|
+	          ^
+	          visibleColOffset
+    */
+	visibleRegion = rect_getIntersection( &charRect, boundary );
+	visibleWidth  = rect_getWidth( visibleRegion );
+	visibleHeight = rect_getHeight( visibleRegion );
+
+	visibleColOffset = visibleRegion->left - charRect.left;
+	visibleRowOffset = visibleRegion->top - charRect.top;
+
+
+
+	// Get base location of character's bitmap
+	bitmap = ( char* ) curFont + ( ch * curFontHeight );
+
+
+	// Paint the visible part of the character
+	row = visibleRowOffset;
+
+	for ( visY = visibleRegion->top; visY < visibleRegion->top + visibleHeight; visY += 1 )
+	{
+		bitmapRow = bitmap[ row ];
+
+		pixelMask = 1 << ( curFontWidth - 1 - visibleColOffset );	
+
+		//
+		for ( visX = visibleRegion->left; visX < visibleRegion->left + visibleWidth; visX += 1 )
+		{
+			// If the bit is set, draw a "font" pixel
+			if ( ( bitmapRow & pixelMask ) != 0 )
+			{
+				idx = ( visY * context->width ) + visX;
+
+				context->frameBuffer[ idx ] = color;
+			}
+
+			pixelMask >>= 1;
+		}
+
+		row  += 1;
+	}
+
+
+	//
+	free( visibleRegion );
+}
+
+void context_drawChar ( struct _Context* context, char ch, int x, int y, uint32_t color )
+{
+	struct _ListNode* node;
+	struct _Rect*     clipRect;
+
+	// If there are clipping rects, draw the character clipped to each of them
+	if ( context->clipRects->nItems > 0 )
+	{
+		node = context->clipRects->rootNode;
+
+		while ( node != NULL )
+		{
+			clipRect = ( struct _Rect* ) node->value;
+
+			context__boundedDrawChar( context, ch, x, y, color, clipRect );
+
+			node = node->next;
+		}
+	}
+
+	/* JK - We expect there to be at least one clipping rect.
+	   If none, it means the clipping-region is empty, and
+	   thus nothing is visible. So we draw nothing.
+	*/
+}
+
+void context_drawString ( struct _Context* context, char* str, int x, int y, uint32_t color )
+{
+	while ( *str != 0 )
+	{
+		context_drawChar( context, *str, x, y, color );
+
+		str += 1;
+		x   += curFontWidth;
+	}
 }
 
 
@@ -1729,6 +1846,15 @@ void window_defaultPaintHandler ( struct _Window* window )  // uses relative pos
 		window->height,
 		WIN_BACKGROUND_COLOR
 	);
+
+context_drawString(
+
+	window->context,
+	"Doing the thing!",
+	window->width / 2 - 48, ( window->height - WIN_TITLEBAR_HEIGHT - curFontHeight ) / 2,
+	0xFF00FFFF
+);
+
 }
 
 void window_paintDecoration ( struct _Window* window )  // uses absolute positions
@@ -1773,17 +1899,6 @@ void window_paintDecoration ( struct _Window* window )  // uses absolute positio
 		WIN_TITLEBAR_HEIGHT,
 		titlebarColor
 	);
-
-	// Fill in the window background
-	/*context_fillRect(
-
-		window->context,
-		windowX,
-		windowY + WIN_TITLEBAR_HEIGHT,
-		window->width,
-		window->height - WIN_TITLEBAR_HEIGHT,
-		WIN_BACKGROUND_COLOR
-	);*/
 
 	// Draw a border around the window 
 	context_strokeRect(
@@ -2396,6 +2511,16 @@ void desktop_paintHandler ( struct _Window* winDesktop )
 		winDesktop->height,
 		DESKTOP_COLOR
 	);
+
+
+context_drawString(
+
+	winDesktop->context,
+	"Look at me!!!",
+	20, winDesktop->height - 20,
+	0xFFFFFFFF
+);
+
 }
 
 
@@ -2413,6 +2538,13 @@ void desktop_handleMouseEvent ( struct _Desktop* desktop, struct _MouseState* mo
 
 
 	// Draw the mouse
+	/* For now, assume only worth redrawing if action... */
+	if (
+
+		( desktop->mouseX != mouseState->mouseX ) ||
+		( desktop->mouseY != mouseState->mouseY ) ||
+		( mouseState->mouseIsPressed != 0 )
+	)
 	{
 		// repaint dirty-region created
 		window_invalidate(
@@ -2511,7 +2643,7 @@ void debug_drawClipRects ( struct _Context* context, uint32_t strokeColor, int s
 
 		printf(
 
-			"   clipRect%d - (%d, %d, %d, %d)\n",
+			"   clipRect%d - (x:%d, y:%d, w:%d, h:%d)\n",
 			i,
 			rect->left,
 			rect->top,
@@ -2579,7 +2711,6 @@ void tut_init ( void )
 
 	// Do the initial paint
 	window_paint( ( struct _Window* ) gDesktop, NULL, 1 );
-
 
 	// Install mouse callback
 	// fakeOS_installMouseUpdateCallback( ... )

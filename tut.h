@@ -101,7 +101,8 @@ struct _Window {
 
 //
 #define WIN_TITLEBAR_HEIGHT 25  // px
-#define WIN_BORDER_WIDTH    3   // px
+#define WIN_BORDER_WIDTH    1   // px
+// #define WIN_BORDER_WIDTH    3   // px
 
 
 // ------------------------------------------------------------------------------------------
@@ -168,6 +169,8 @@ void             context_lineVertical      ( struct _Context* context, int x, in
 void             context_strokeRect        ( struct _Context* context, int x, int y, int width, int height, uint32_t color, int strokeWeight );
 void             context_fillRect          ( struct _Context* context, int x, int y, int width, int height, uint32_t color );
 void             context_setPixel          ( struct _Context* context, int x, int y, uint32_t color );
+void             context_drawChar          ( struct _Context* context, char ch, int x, int y, uint32_t color );
+void             context_drawString        ( struct _Context* context, char* str, int x, int y, uint32_t color );
 
 
 //
