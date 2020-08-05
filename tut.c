@@ -16,10 +16,20 @@ struct _Desktop*    gDesktop;  // hmmm...
 struct _Context*    gContext;  // hmmm...
 struct _MouseState* gMouseState;
 
+
+char* curFont       = g_8x11_font__Gohu;
+int   curFontWidth  = 8;
+int   curFontHeight = 11;
+
+
 // struct _Window* win0;
 // struct _Window* win1;
 // struct _Window* win2;
 // struct _Window* win3;
+
+
+void demoBasic_init ( struct _Desktop* gDesktop ); 
+void demoBasic_exit ( struct _Desktop* gDesktop ); 
 
 
 
@@ -216,6 +226,13 @@ void list_freeNodes ( struct _List* list )
 	struct _ListNode* node;
 	struct _ListNode* curNode;
 
+	// Nothing to do
+	if ( list == NULL )
+	{
+		return;
+	}
+
+	//
 	node = list->rootNode;
 
 	while ( node )
@@ -265,6 +282,13 @@ struct _Rect* rect_new ( int top, int left, int bottom, int right )
 	return rect;
 }
 
+void rect_free ( struct _Rect* rect )
+{
+	free( rect );
+
+	rect = NULL;
+}
+
 
 // ------------------------------------------------------------------------------------------
 
@@ -300,9 +324,10 @@ int rect_rectsIntersect ( struct _Rect* rectA, struct _Rect* rectB )
 */
 struct _List* rect_split ( struct _Rect* _targetRect, struct _Rect* cuttingRect )
 {
-	struct _List* outputRects;
-	struct _Rect  targetRect;
-	struct _Rect* rect;
+	struct _List*     outputRects;
+	struct _Rect      targetRect;
+	struct _Rect*     rect;
+	struct _ListNode* node;
 
 	// If the rectangles don't overlap, nothing to do
 	if ( rect_rectsIntersect( _targetRect, cuttingRect ) == 0 )
@@ -364,14 +389,12 @@ struct _List* rect_split ( struct _Rect* _targetRect, struct _Rect* cuttingRect 
 
 		if ( rect == NULL )
 		{
-			free( outputRects );
-
-			return NULL;
+			goto error;
 		}
 
 
 		// Add the new rectangle to the output list
-		list_appendNode( outputRects, rect );
+		list_appendNode( outputRects, ( void* ) rect );
 
 		// Shrink targetRect to exclude the sliced portion
 		targetRect.left = cuttingRect->left;
@@ -414,14 +437,12 @@ struct _List* rect_split ( struct _Rect* _targetRect, struct _Rect* cuttingRect 
 
 		if ( rect == NULL )
 		{
-			list_free( outputRects );
-
-			return NULL;
+			goto error;
 		}
 
 
 		// Add the new rectangle to the output list
-		list_appendNode( outputRects, rect );
+		list_appendNode( outputRects, ( void* ) rect );
 
 		// Shrink targetRect to exclude the sliced portion
 		targetRect.top = cuttingRect->top;
@@ -465,14 +486,12 @@ struct _List* rect_split ( struct _Rect* _targetRect, struct _Rect* cuttingRect 
 
 		if ( rect == NULL )
 		{
-			list_free( outputRects );
-
-			return NULL;
+			goto error;
 		}
 
 
 		// Add the new rectangle to the output list
-		list_appendNode( outputRects, rect );
+		list_appendNode( outputRects, ( void* ) rect );
 
 		// Shrink targetRect to exclude the sliced portion
 		targetRect.right = cuttingRect->right;
@@ -515,14 +534,12 @@ struct _List* rect_split ( struct _Rect* _targetRect, struct _Rect* cuttingRect 
 
 		if ( rect == NULL )
 		{
-			list_free( outputRects );
-
-			return NULL;
+			goto error;
 		}
 
 
 		// Add the new rectangle to the output list
-		list_appendNode( outputRects, rect );
+		list_appendNode( outputRects, ( void* ) rect );
 
 		// Shrink targetRect to exclude the sliced portion
 		targetRect.bottom = cuttingRect->bottom;
@@ -531,6 +548,27 @@ struct _List* rect_split ( struct _Rect* _targetRect, struct _Rect* cuttingRect 
 
 	// Done - - - - - - - - - - - - - - - - - - - - - - - - - -
 	return outputRects;
+
+
+	// Error - - - - - - - - - - - - - - - - - - - - - - - - - -
+	error:
+
+		// Free rects in list
+		node = outputRects->rootNode;
+
+		while ( node != NULL )
+		{
+			rect = ( struct _Rect* ) node->value;
+
+			rect_free( rect );
+
+			node = node->next;
+		}
+
+		// Free list
+		list_free( outputRects );
+
+		return NULL;
 }
 
 
@@ -652,14 +690,16 @@ struct _Context* context_new ( int width, int height )
 		return NULL;
 	}
 
-	// context->clippingEnabled = 0;
-
 	return context;
 }
 
 void context_free ( struct _Context* context )
 {
 	free( context->frameBuffer );
+
+	context_clearClipRects( context );
+
+	free( context->clipRects );
 
 	free( context );
 
@@ -710,7 +750,7 @@ void context_subtractClipRect ( struct _Context* context, struct _Rect* subRect 
 
 			list_removeNode( context->clipRects, i );
 
-			free( oldClipRect );
+			rect_free( oldClipRect );
 
 
 			// Replace it with its visible slices
@@ -720,7 +760,7 @@ void context_subtractClipRect ( struct _Context* context, struct _Rect* subRect 
 			{
 				newClipRect = ( struct _Rect* ) node2->value;
 
-				list_appendNode( context->clipRects, newClipRect );
+				list_appendNode( context->clipRects, ( void* ) newClipRect );
 
 				node2 = node2->next;
 			}
@@ -750,7 +790,7 @@ void context_addClipRect ( struct _Context* context, struct _Rect* newRect )
 	/* At this point we have ensured that none of the exisitng rectangles
 	   overlap with the new one. As such, it can finally be added to the list
 	*/
-	list_appendNode( context->clipRects, newRect );
+	list_appendNode( context->clipRects, ( void* ) newRect );
 }
 
 /* Update the clipping rectangles to include ONLY the areas inside BOTH
@@ -782,8 +822,10 @@ void context_intersectClipRect ( struct _Context* context, struct _Rect* newRect
 
 		if ( unionRect != NULL )
 		{
-			list_appendNode( unionRects, unionRect );
+			list_appendNode( unionRects, ( void* ) unionRect );
 		}
+
+		rect_free( oldClipRect );
 
 		node = node->next;
 	}
@@ -809,11 +851,10 @@ void context_clearClipRects ( struct _Context* context )
 	{
 		rect = ( struct _Rect* ) node->value;
 
-		free( rect );
+		rect_free( rect );
 
 		node = node->next;
 	}
-
 
 	// Free list nodes
 	list_freeNodes( context->clipRects );
@@ -968,7 +1009,7 @@ void context__boundedFillRect (
 
 
 	//
-	free( visibleRegion );
+	rect_free( visibleRegion );
 }
 
 /* Since all our drawing primitives ultimately call this function,
@@ -1041,10 +1082,6 @@ void context_setPixel (
 
 
 // ------------------------------------------------------------------------------------------
-
-static char* curFont       = g_8x11_font__Gohu;
-static int   curFontWidth  = 8;
-static int   curFontHeight = 11;
 
 void context__boundedDrawChar ( struct _Context* context, char ch, int x, int y, uint32_t color, struct _Rect* boundary )
 {
@@ -1138,7 +1175,7 @@ void context__boundedDrawChar ( struct _Context* context, char ch, int x, int y,
 
 
 	//
-	free( visibleRegion );
+	rect_free( visibleRegion );
 }
 
 void context_drawChar ( struct _Context* context, char ch, int x, int y, uint32_t color )
@@ -1237,6 +1274,7 @@ int window_init (
 	window->width   = width;
 	window->height  = height;
 	window->flags   = flags;
+	window->title   = NULL;
 	window->context = context;
 
 	window->children = list_new();
@@ -1256,13 +1294,65 @@ int window_init (
 	window->mousePressEventHandler   = window_defaultMousePressEventHandler;
 	window->mouseReleaseEventHandler = window_defaultMouseReleaseEventHandler;
 	window->mouseIsPressedHandler    = window_defaultMouseIsPressedHandler;
+	window->freeHandler              = NULL;
 
 	return SUCCESS;
 }
 
 void window_free ( struct _Window* window )
 {
-	// TODO
+	struct _ListNode* node;
+	struct _Window*   childWindow;
+
+	// Free subclass specific parts
+	if ( window->freeHandler != NULL )
+	{
+		window->freeHandler( window );
+	}
+
+
+	// Free each child
+	node = window->children->rootNode;
+
+	while ( node != NULL )
+	{
+		childWindow = ( struct _Window* ) node->value;
+
+		window_free( childWindow );
+
+		node = node->next;
+	}
+
+
+	// Free _Window part
+	list_free( window->children );
+
+	free( window->title );
+
+	free( window );
+
+	window = NULL;
+}
+
+
+// ------------------------------------------------------------------------------------------
+
+void window_setTitle ( struct _Window* window, char* newTitle )
+{
+	// Free existing
+	if ( window->title != NULL )
+	{
+		free( window->title );
+	}
+
+	// Copy new
+	window->title = strdup( newTitle );
+
+	// Repaint to show change
+	if ( ( window->flags & WIN_FLAG_NO_DECORATION ) == 0 )
+	{
+		window_updateDecoration( window );
+	}
 }
 
 
@@ -1408,7 +1498,7 @@ struct _List* window_getChildWindowsAbove ( struct _Window* window, struct _Wind
 
 			if ( rect_rectsIntersect( &curWindowRect, &btmWindowRect ) )  // 2)
 			{
-				list_appendNode( topWindows, curWindow );
+				list_appendNode( topWindows, ( void* ) curWindow );
 			}
 		}
 
@@ -1471,7 +1561,7 @@ struct _List* window_getChildWindowsBelow ( struct _Window* window, struct _Wind
 
 			if ( rect_rectsIntersect( &curWindowRect, &topWindowRect ) )  // 2)
 			{
-				list_appendNode( btmWindows, curWindow );
+				list_appendNode( btmWindows, ( void* ) curWindow );
 			}
 		}
 
@@ -1613,6 +1703,8 @@ void window_createClippingRegion ( struct _Window* window, struct _List* dirtyRe
 
 			// Set clipping region as union of window and dirty-region
 			context_intersectClipRect( window->context, winRect );
+
+			rect_free( winRect );
 		}
 
 		// Add "whole" window without clipping
@@ -1635,7 +1727,7 @@ void window_createClippingRegion ( struct _Window* window, struct _List* dirtyRe
 	*/
 	context_intersectClipRect( window->context, winRect );
 
-	free( winRect );
+	rect_free( winRect );
 
 
 	/* Remove portions of the window which are hidden/occluded
@@ -1846,15 +1938,6 @@ void window_defaultPaintHandler ( struct _Window* window )  // uses relative pos
 		window->height,
 		WIN_BACKGROUND_COLOR
 	);
-
-context_drawString(
-
-	window->context,
-	"Doing the thing!",
-	window->width / 2 - 48, ( window->height - WIN_TITLEBAR_HEIGHT - curFontHeight ) / 2,
-	0xFF00FFFF
-);
-
 }
 
 void window_paintDecoration ( struct _Window* window )  // uses absolute positions
@@ -1862,6 +1945,8 @@ void window_paintDecoration ( struct _Window* window )  // uses absolute positio
 	int      windowX;
 	int      windowY;
 	uint32_t titlebarColor;
+	uint32_t titlebarTextColor;
+	int      titlebarTextTopPadding;
 
 	//
 	windowX = window_getAbsoluteXPosition( window );
@@ -1870,24 +1955,15 @@ void window_paintDecoration ( struct _Window* window )  // uses absolute positio
 	//
 	if ( window == window->parent->activeChild )
 	{
-		titlebarColor = WIN_TITLEBAR_COLOR;
+		titlebarColor     = WIN_TITLEBAR_COLOR;
+		titlebarTextColor = WIN_TITLEBAR_TEXT_COLOR;
 	}
 	else
 	{
-		titlebarColor = WIN_TITLEBAR_INACTIVE_COLOR;
+		titlebarColor     = WIN_TITLEBAR_INACTIVE_COLOR;
+		titlebarTextColor = WIN_TITLEBAR_TEXT_INACTIVE_COLOR;
 	}
 
-
-	// Debug
-	/*context_fillRect(
-
-		window->context,
-		windowX,
-		windowY,
-		window->width,
-		window->height,
-		window->debugColor
-	);*/
 
 	// Fill in the titlebar background
 	context_fillRect(
@@ -1899,6 +1975,21 @@ void window_paintDecoration ( struct _Window* window )  // uses absolute positio
 		WIN_TITLEBAR_HEIGHT,
 		titlebarColor
 	);
+
+	// Draw the title
+	if ( window->title != NULL )
+	{
+		titlebarTextTopPadding = ( WIN_TITLEBAR_HEIGHT - curFontHeight ) / 2;
+
+		context_drawString(
+
+			window->context,
+			window->title,
+			windowX + WIN_TITLEBAR_TEXT_LEFT_PADDING,
+			windowY + titlebarTextTopPadding,
+			titlebarTextColor
+		);
+	}
 
 	// Draw a border around the window 
 	context_strokeRect(
@@ -1993,7 +2084,7 @@ void window_invalidate ( struct _Window* window, int x, int y, int width, int he
 		goto cleanup;
 	}
 
-	status = list_appendNode( dirtyRects, dirtyRect );
+	status = list_appendNode( dirtyRects, ( void* ) dirtyRect );
 
 	if ( status == FAIL )
 	{
@@ -2008,14 +2099,8 @@ void window_invalidate ( struct _Window* window, int x, int y, int width, int he
 	//
 	cleanup:
 
-		if ( dirtyRect != NULL )
-		{
-			free( dirtyRect );		
-		}
-		if ( dirtyRects != NULL )
-		{
-			list_free( dirtyRects );
-		}
+		rect_free( dirtyRect );
+		list_free( dirtyRects );
 }
 
 
@@ -2109,6 +2194,7 @@ void window_moveWindow ( struct _Window* window, int newX, int newY )
 	int               absNewX;
 	int               absNewY;
 	struct _Rect      rect;
+	struct _Rect*     dirtyRect;
 	struct _List*     emptyList;
 	struct _List*     dirtyRects;
 	struct _List*     dirtyWindows;
@@ -2197,8 +2283,25 @@ void window_moveWindow ( struct _Window* window, int newX, int newY )
 
 
 	// Cleanup
-	list_free( dirtyWindows );
-	list_free( dirtyRects );
+	{
+		// Free rects in list
+		node = dirtyRects->rootNode;
+
+		while ( node != NULL )
+		{
+			dirtyRect = ( struct _Rect* ) node->value;
+
+			rect_free( dirtyRect );
+
+			node = node->next;
+		}
+
+		// Free list
+		list_free( dirtyRects );
+
+		//
+		list_free( dirtyWindows );
+	}
 }
 
 
@@ -2493,10 +2596,6 @@ struct _Desktop* desktop_new ( struct _Context* context )
 	return desktop;
 }
 
-void desktop_free ( struct _Desktop* desktop )
-{
-	// TODO
-}
 
 // ------------------------------------------------------------------------------------------
 
@@ -2512,15 +2611,14 @@ void desktop_paintHandler ( struct _Window* winDesktop )
 		DESKTOP_COLOR
 	);
 
+	context_drawString(
 
-context_drawString(
-
-	winDesktop->context,
-	"Look at me!!!",
-	20, winDesktop->height - 20,
-	0xFFFFFFFF
-);
-
+		winDesktop->context,
+		"WSBE",
+		10,
+		winDesktop->height - curFontHeight - 10,
+		0xFFFFFFFF
+	);
 }
 
 
@@ -2681,42 +2779,19 @@ void tut_init ( void )
 	gDesktop = desktop_new( gContext );
 
 
-
 	//
-	win0 = window_createChildWindow( ( struct _Window* ) gDesktop,  10,  10, 300, 200, 0 );
-	win1 = window_createChildWindow( ( struct _Window* ) gDesktop, 100, 150, 400, 400, 0 );
-	win2 = window_createChildWindow( ( struct _Window* ) gDesktop, 200, 100, 200, 400, 0 );
-
-
-	win3 = window_createChildWindow(
-
-		win0,
-		( win0->width / 2 ) - ( 100 / 2 ),
-		( win0->height / 2 ) - ( 100 / 2 ),
-		100, 100,
-		0
-	);
-
-
-	btn = toggleButton_new(
-
-		( win2->width / 2 ) - ( 70 / 2 ),
-		( win2->height / 2 ) - ( 30 / 2 ),
-		70, 30
-	);
-
-	window_appendChildWindow( win2, ( struct _Window* ) btn );
-
+	demoBasic_init( gDesktop );
 
 
 	// Do the initial paint
 	window_paint( ( struct _Window* ) gDesktop, NULL, 1 );
 
+
 	// Install mouse callback
 	// fakeOS_installMouseUpdateCallback( ... )
 }
 
-void tut_main ( void )
+void tut_update ( void )
 {
 	// Poll mouse status
 	// fakeOS_waitForMouseUpdate( ... )
@@ -2731,8 +2806,9 @@ void tut_exit ( void )
 
 	context_free( gContext );
 
-	// TODO (free desktop, free windows, free buttons and misc widgets...)
-	// desktop_free( gDesktop );
+	demoBasic_exit( gDesktop );
+
+	window_free( ( struct _Window* ) gDesktop );
 }
 
 
@@ -2802,7 +2878,7 @@ bool UI_onUserUpdate ( void )
 {
 	olcGlue_getMouseStatus();
 
-	tut_main();
+	tut_update();
 
 	olcGlue_renderContextBuffer( gContext );
 

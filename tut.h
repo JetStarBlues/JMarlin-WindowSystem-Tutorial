@@ -1,6 +1,6 @@
 // ------------------------------------------------------------------------------------------
 
-#define FAIL    0  // TODO
+#define FAIL    0
 #define SUCCESS 1
 
 
@@ -66,6 +66,7 @@ struct _Window {
 	int height;
 
 	uint16_t flags;
+	char*    title;
 
 	struct _Context* context;
 
@@ -86,23 +87,14 @@ struct _Window {
 	void ( *mousePressEventHandler )   ( struct _Window*, int, int );
 	void ( *mouseReleaseEventHandler ) ( struct _Window*, int, int );
 	void ( *mouseIsPressedHandler )    ( struct _Window*, int, int );
+
+	//
+	void ( *freeHandler ) ( struct _Window* );
 };
 
 
 // Window flags
 #define WIN_FLAG_NO_DECORATION 0x1
-
-// Theme
-#define WIN_BACKGROUND_COLOR        0xBBBBBBFF
-#define WIN_TITLEBAR_COLOR          0x7092BEFF
-#define WIN_TITLEBAR_INACTIVE_COLOR 0x808090FF
-#define WIN_BORDER_COLOR            0xFF0000FF
-#define DESKTOP_COLOR               0x2C2137FF
-
-//
-#define WIN_TITLEBAR_HEIGHT 25  // px
-#define WIN_BORDER_WIDTH    1   // px
-// #define WIN_BORDER_WIDTH    3   // px
 
 
 // ------------------------------------------------------------------------------------------
@@ -130,6 +122,32 @@ struct _MouseState {
 };
 
 
+// ------------------------------------------------------------------------------------------
+
+extern char* curFont;
+extern int   curFontWidth;
+extern int   curFontHeight;
+
+
+
+
+// ------------------------------------------------------------------------------------------
+
+// Theme
+#define WIN_BACKGROUND_COLOR             0xBBBBBBFF
+#define WIN_BORDER_COLOR                 0xFF0000FF
+#define WIN_TITLEBAR_COLOR               0x7092BEFF
+#define WIN_TITLEBAR_INACTIVE_COLOR      0x808090FF
+#define WIN_TITLEBAR_TEXT_COLOR          0xFFFFFFFF
+#define WIN_TITLEBAR_TEXT_INACTIVE_COLOR 0xBBBBBBFF
+#define DESKTOP_COLOR                    0x2C2137FF
+
+//
+#define WIN_TITLEBAR_HEIGHT            25  // px
+#define WIN_TITLEBAR_TEXT_LEFT_PADDING 5   // px
+#define WIN_BORDER_WIDTH               1   // px
+
+
 
 
 
@@ -150,6 +168,7 @@ void              list_free         ( struct _List* list );
 
 //
 struct _Rect* rect_new             ( int top, int left, int bottom, int right );
+void          rect_free            ( struct _Rect* rect );
 int           rect_getWidth        ( struct _Rect* rect );
 int           rect_getHeight       ( struct _Rect* rect );
 int           rect_rectsIntersect  ( struct _Rect* rectA, struct _Rect* rectB );
@@ -176,6 +195,8 @@ void             context_drawString        ( struct _Context* context, char* str
 //
 struct _Window* window_new                             ( int x, int y, int width, int height, uint16_t flags, struct _Context* context );
 int             window_init                            ( struct _Window* window, int x, int y, int width, int height, uint16_t flags, struct _Context* context );
+void            window_free                            ( struct _Window* window );
+void            window_setTitle                        ( struct _Window* window, char* newTitle );
 int             window_getAbsoluteXPosition            ( struct _Window* window );
 int             window_getAbsoluteYPosition            ( struct _Window* window );
 struct _Window* window_createChildWindow               ( struct _Window* window, int x, int y, int width, int height, uint16_t flags );

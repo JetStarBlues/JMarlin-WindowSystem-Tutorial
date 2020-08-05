@@ -5,7 +5,8 @@ LIBS   = -lX11 -lGL -lpthread
 SRC_FILES =               \
 	olcPGE_min_x11_gdi.c  \
 	widgets.c             \
-	tut.c
+	tut.c                 \
+	demoBasic.c
 
 all:
 
