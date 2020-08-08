@@ -32,6 +32,23 @@ void demoCalculator_exit ( struct _Desktop* gDesktop );
 
 
 
+/* ==========================================================================================
+   ...
+   ========================================================================================== */
+
+uint32_t reverseByteOrder ( uint32_t x )
+{
+	return (
+
+		( ( x & 0xFF000000 ) >> 24 ) |
+		( ( x & 0x00FF0000 ) >> 8  ) |
+		( ( x & 0x0000FF00 ) << 8  ) |
+		( ( x & 0x000000FF ) << 24 )
+	);
+}
+
+
+
 
 /* ==========================================================================================
    ...
@@ -1002,7 +1019,8 @@ void context__boundedFillRect (
 		{
 			idx = ( visY * context->width ) + visX;
 
-			context->frameBuffer[ idx ] = color;
+			// context->frameBuffer[ idx ] = color;
+			context->frameBuffer[ idx ] = reverseByteOrder( color );
 		}
 	}
 
@@ -1076,7 +1094,8 @@ void context_setPixel (
 
 	idx = ( y * context->width ) + x;
 
-	context->frameBuffer[ idx ] = color;
+	// context->frameBuffer[ idx ] = color;
+	context->frameBuffer[ idx ] = reverseByteOrder( color );
 }
 
 
@@ -1163,7 +1182,8 @@ void context__boundedDrawChar ( struct _Context* context, char ch, int x, int y,
 			{
 				idx = ( visY * context->width ) + visX;
 
-				context->frameBuffer[ idx ] = color;
+				// context->frameBuffer[ idx ] = color;
+				context->frameBuffer[ idx ] = reverseByteOrder( color );
 			}
 
 			pixelMask >>= 1;
@@ -2879,39 +2899,44 @@ void tut_exit ( void )
    olcPixelGameEngine
    =~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~ */
 
-// TODO: Change this to blit, instead of per-pixel call
-void olcGlue_renderContextBuffer ( struct _Context* context )
+static Pixel* defaultDrawTargetBuffer;
+
+/* Force olcPGE to use the context's buffer, instead of
+   its default internal one
+*/
+void olcGlue_overrideDrawTarget ( struct _Context* context )
 {
-	int          i;
-	int          x;
-	int          y;
-	uint32_t     color;
-	uint8_t      r;
-	uint8_t      g;
-	uint8_t      b;
+	Sprite* defaultDrawTarget;
 
-	i = 0;
-	x = 0;
-	y = 0;
+	// Get default draw target (assumes default is current)
+	defaultDrawTarget = PGE_getDrawTarget();
 
-	while ( i < context->nPixels )
+	if (
+
+		( defaultDrawTarget->width  != context->width  ) ||
+		( defaultDrawTarget->height != context->height )
+	)
 	{
-		color = context->frameBuffer[ i ];
-		r = ( color >> 24 ) & 0xFF;
-		g = ( color >> 16 ) & 0xFF;
-		b = ( color >>  8 ) & 0xFF;
-
-		PGE_drawRGB( x, y, r, g, b );
-
-		i += 1;
-		x += 1;
-
-		if ( x == context->width )
-		{
-			x  = 0;
-			y += 1;
-		}
+		printf( "ERROR: Expect context with same dimensions as pDefaultDrawTarget\n" );
+		return;
 	}
+
+	// Save a pointer to its buffer (will be used to restore)
+	defaultDrawTargetBuffer = defaultDrawTarget->pColData;
+
+	// Point to the context's buffer instead
+	defaultDrawTarget->pColData = ( Pixel* ) context->frameBuffer;
+}
+
+void olcGlue_restoreDrawTarget ( void )
+{
+	Sprite* defaultDrawTarget;
+
+	// Get default draw target (assumes default is current)
+	defaultDrawTarget = PGE_getDrawTarget();
+
+	// Restore pointer to its original buffer
+	defaultDrawTarget->pColData = defaultDrawTargetBuffer;
 }
 
 void olcGlue_getMouseStatus ( void )
@@ -2931,6 +2956,8 @@ bool UI_onUserCreate ( void )
 {
 	tut_init();
 
+	olcGlue_overrideDrawTarget( gContext );
+
 	return true;
 }
 
@@ -2940,15 +2967,14 @@ bool UI_onUserUpdate ( void )
 
 	tut_update();
 
-	olcGlue_renderContextBuffer( gContext );
-
-	// return false;
 	return true;
 }
 
 bool UI_onUserDestroy ( void )
 {
 	tut_exit();
+
+	olcGlue_restoreDrawTarget();
 
 	return true;
 }
