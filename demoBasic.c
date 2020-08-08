@@ -5,13 +5,13 @@
 #include "widgets.h"
 
 
-void crudeBtnTest ( struct _ToggleButton* btn, int x, int y )
+void crudeBtnTest ( struct _ToggleButton* btn, int relMouseX, int relMouseY )
 {
 	printf( "text:%s state:%d pos:( %d, %d )\n",
 
 		btn->text,
 		btn->isSet,
-		x, y
+		relMouseX, relMouseY
 	);
 }
 
@@ -72,6 +72,6 @@ void demoBasic_init ( struct _Desktop* gDesktop )
 
 void demoBasic_exit ( struct _Desktop* gDesktop )
 {
-	// TODO
+	//
 }
 

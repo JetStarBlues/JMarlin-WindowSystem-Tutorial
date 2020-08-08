@@ -22,14 +22,13 @@ int   curFontWidth  = 8;
 int   curFontHeight = 11;
 
 
-// struct _Window* win0;
-// struct _Window* win1;
-// struct _Window* win2;
-// struct _Window* win3;
+#define DEMO_BASIC      0
+#define DEMO_CALCULATOR 1
 
-
-void demoBasic_init ( struct _Desktop* gDesktop ); 
-void demoBasic_exit ( struct _Desktop* gDesktop ); 
+void demoBasic_init ( struct _Desktop* gDesktop );
+void demoBasic_exit ( struct _Desktop* gDesktop );
+void demoCalculator_init ( struct _Desktop* gDesktop );
+void demoCalculator_exit ( struct _Desktop* gDesktop );
 
 
 
@@ -99,7 +98,7 @@ int list_appendNode ( struct _List* list, void* value )
 
 	if ( newNode == NULL )
 	{
-		return FAIL;
+		return ST_FAIL;
 	}
 
 
@@ -130,7 +129,7 @@ int list_appendNode ( struct _List* list, void* value )
 	//
 	list->nItems += 1;
 
-	return SUCCESS;
+	return ST_SUCCESS;
 }
 
 void* list_removeNode ( struct _List* list, int index )
@@ -1246,7 +1245,7 @@ struct _Window* window_new (
 	// Initialize the window
 	status = window_init( window, x, y, width, height, flags, context );
 
-	if ( status == FAIL )
+	if ( status == ST_FAIL )
 	{
 		free( window );
 
@@ -1281,7 +1280,7 @@ int window_init (
 
 	if ( window->children == NULL )
 	{
-		return FAIL;
+		return ST_FAIL;
 	}
 
 	window->parent                   = NULL;
@@ -1296,7 +1295,7 @@ int window_init (
 	window->mouseIsPressedHandler    = window_defaultMouseIsPressedHandler;
 	window->freeHandler              = NULL;
 
-	return SUCCESS;
+	return ST_SUCCESS;
 }
 
 void window_free ( struct _Window* window )
@@ -1388,6 +1387,31 @@ int window_getAbsoluteYPosition ( struct _Window* window )
 
 // ------------------------------------------------------------------------------------------
 
+// Set the context of the window and it's children
+void window_updateContext ( struct _Window* window, struct _Context* context )
+{
+	struct _ListNode* node;
+	struct _Window*   childWindow;
+
+	// Set window's context
+	window->context = context;
+
+	// Set children's context
+	node = window->children->rootNode;
+
+	while ( node != NULL )
+	{
+		childWindow = ( struct _Window* ) node->value;
+
+		window_updateContext( childWindow, context );
+
+		node = node->next;
+	}
+}
+
+
+// ------------------------------------------------------------------------------------------
+
 struct _Window* window_createChildWindow (
 
 	struct _Window* window,
@@ -1412,7 +1436,7 @@ struct _Window* window_createChildWindow (
 	//
 	status = list_appendNode( window->children, ( void* ) childWindow );
 
-	if ( status == FAIL )
+	if ( status == ST_FAIL )
 	{
 		free( childWindow );
 
@@ -1433,14 +1457,16 @@ void window_appendChildWindow ( struct _Window* window, struct _Window* childWin
 	//
 	status = list_appendNode( window->children, ( void* ) childWindow );
 
-	if ( status == FAIL )
+	if ( status == ST_FAIL )
 	{
 		return;
 	}
 
 	//
-	childWindow->parent  = window;
-	childWindow->context = window->context;
+	childWindow->parent = window;
+
+	//
+	window_updateContext( childWindow, window->context );
 }
 
 
@@ -1775,6 +1801,13 @@ void window_paint ( struct _Window* window, struct _List* dirtyRects, int paintC
 	struct _Rect*     dirtyRect;
 
 
+	// Nothing to do without a context
+	if ( window->context == NULL )
+	{
+		return;
+	}
+
+
 	// Reset
 	context_clearClipRects( window->context );
 	window->context->xOffset = 0;
@@ -2020,7 +2053,13 @@ void window_paintDecoration ( struct _Window* window )  // uses absolute positio
 
 void window_updateDecoration ( struct _Window* window )
 {
-	// Nothing to do
+	// Nothing to do without a context
+	if ( window->context == NULL )
+	{
+		return;
+	}
+
+	// Nothing to do if window has no decoration
 	if ( ( window->flags & WIN_FLAG_NO_DECORATION ) == 1 )
 	{
 		return;
@@ -2086,7 +2125,7 @@ void window_invalidate ( struct _Window* window, int x, int y, int width, int he
 
 	status = list_appendNode( dirtyRects, ( void* ) dirtyRect );
 
-	if ( status == FAIL )
+	if ( status == ST_FAIL )
 	{
 		goto cleanup;
 	}
@@ -2200,6 +2239,13 @@ void window_moveWindow ( struct _Window* window, int newX, int newY )
 	struct _List*     dirtyWindows;
 	struct _ListNode* node;
 	struct _Window*   siblingWindow;
+
+	// Nothing to do without a context
+	if ( window->context == NULL )
+	{
+		return;
+	}
+
 
 	// If a window is moved, it must become the top-most window
 	window_raiseWindow( window );
@@ -2577,7 +2623,7 @@ struct _Desktop* desktop_new ( struct _Context* context )
 		context
 	);
 
-	if ( status == FAIL )
+	if ( status == ST_FAIL )
 	{
 		free( desktop );
 
@@ -2780,7 +2826,14 @@ void tut_init ( void )
 
 
 	//
-	demoBasic_init( gDesktop );
+	if ( DEMO_BASIC )
+	{
+		demoBasic_init( gDesktop );
+	}
+	else if ( DEMO_CALCULATOR )
+	{
+		demoCalculator_init( gDesktop );
+	}
 
 
 	// Do the initial paint
@@ -2806,7 +2859,14 @@ void tut_exit ( void )
 
 	context_free( gContext );
 
-	demoBasic_exit( gDesktop );
+	if ( DEMO_BASIC )
+	{
+		demoBasic_exit( gDesktop );
+	}
+	else if ( DEMO_CALCULATOR )
+	{
+		demoCalculator_exit( gDesktop );
+	}
 
 	window_free( ( struct _Window* ) gDesktop );
 }
@@ -2900,6 +2960,8 @@ int main ( void )
 	{
 		PGE_start();
 	}
+
+	PGE_destroy();
 
 	return 0;
 }

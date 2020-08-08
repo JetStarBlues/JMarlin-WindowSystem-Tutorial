@@ -6,7 +6,8 @@ SRC_FILES =               \
 	olcPGE_min_x11_gdi.c  \
 	widgets.c             \
 	tut.c                 \
-	demoBasic.c
+	demoBasic.c           \
+	demoCalculator.c
 
 all:
 

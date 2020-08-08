@@ -1,7 +1,7 @@
 // ------------------------------------------------------------------------------------------
 
-#define FAIL    0
-#define SUCCESS 1
+#define ST_FAIL    0
+#define ST_SUCCESS 1
 
 
 // ------------------------------------------------------------------------------------------
@@ -199,6 +199,7 @@ void            window_free                            ( struct _Window* window 
 void            window_setTitle                        ( struct _Window* window, char* newTitle );
 int             window_getAbsoluteXPosition            ( struct _Window* window );
 int             window_getAbsoluteYPosition            ( struct _Window* window );
+void            window_updateContext                   ( struct _Window* window, struct _Context* context );
 struct _Window* window_createChildWindow               ( struct _Window* window, int x, int y, int width, int height, uint16_t flags );
 void            window_appendChildWindow               ( struct _Window* window, struct _Window* childWindow );
 struct _List*   window_getChildWindowsAbove            ( struct _Window* window, struct _Window* btmWindow );

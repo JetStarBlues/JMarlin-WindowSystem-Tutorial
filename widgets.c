@@ -43,7 +43,7 @@ struct _ToggleButton* toggleButton_new ( int x, int y, int width, int height )
 		NULL
 	);
 
-	if ( status == FAIL )
+	if ( status == ST_FAIL )
 	{
 		free( toggleButton );
 
@@ -81,14 +81,24 @@ void toggleButton_setText ( struct _ToggleButton* toggleButton, char* text )
 {
 	struct _Window* winToggleButton;
 
-	// Free existing
+	// Free existing text
 	if ( toggleButton->text != NULL )
 	{
 		free( toggleButton->text );
 	}
 
-	// Copy new
-	toggleButton->text = strdup( text );
+
+	// If new text is NULL, assume intent was to clear text
+	if ( text == NULL )
+	{
+		toggleButton->text = NULL;
+	}
+	// Otherwise, set new text
+	else
+	{
+		toggleButton->text = strdup( text );
+	}
+
 
 	// Repaint to show change
 	winToggleButton = ( struct _Window* ) toggleButton;
@@ -249,7 +259,7 @@ struct _TextBox* textBox_new ( int x, int y, int width, int height )
 		NULL
 	);
 
-	if ( status == FAIL )
+	if ( status == ST_FAIL )
 	{
 		free( textBox );
 
@@ -284,14 +294,24 @@ void textBox_setText ( struct _TextBox* textBox, char* text )
 {
 	struct _Window* winTextBox;
 
-	// Free existing
+	// Free existing text
 	if ( textBox->text != NULL )
 	{
 		free( textBox->text );
 	}
 
-	// Copy new
-	textBox->text = strdup( text );
+
+	// If new text is NULL, assume intent was to clear text
+	if ( text == NULL )
+	{
+		textBox->text = NULL;
+	}
+	// Otherwise, set new text
+	else
+	{
+		textBox->text = strdup( text );
+	}
+
 
 	// Repaint to show change
 	winTextBox = ( struct _Window* ) textBox;
@@ -315,6 +335,8 @@ void textBox_appendText ( struct _TextBox* textBox, char* text )
 	if ( textBox->text == NULL )
 	{
 		textBox_setText( textBox, text );
+
+		return;
 	}
 
 
