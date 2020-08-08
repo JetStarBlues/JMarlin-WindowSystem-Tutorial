@@ -1,4 +1,13 @@
-/* API - https://github.com/OneLoneCoder/olcPixelGameEngine/wiki/olc::PixelGameEngine
+/* A subset of the olcPixelGameEngine
+    https://github.com/OneLoneCoder/olcPixelGameEngine/
+
+   Code has been stripped down to the bare minimum required to
+   support Linux and Windows pixel drawing.
+
+   Information on the API can be found at:
+    https://github.com/OneLoneCoder/olcPixelGameEngine/wiki/olc::PixelGameEngine
+
+   Currently up to date with v1.19
 */
 
 
@@ -100,6 +109,7 @@ bool UI_onUserDestroy ( void );
 enum rcode PGE_construct ( uint32_t screen_w, uint32_t screen_h,
                            uint32_t pixel_w, uint32_t pixel_h, char* app_title );
 enum rcode PGE_start     ( void );
+enum rcode PGE_destroy   ( void );  // JK, cleanup
 
 
 // User input
@@ -124,7 +134,3 @@ int32_t PGE_getDrawTargetHeight ( void );
 void PGE_clearRGB ( uint8_t r, uint8_t g, uint8_t b );
 bool PGE_drawRGB  ( int32_t x, int32_t y, uint8_t r, uint8_t g, uint8_t b );
 // bool PGE_draw    ( int32_t x, int32_t y, Pixel* p );
-
-
-
-

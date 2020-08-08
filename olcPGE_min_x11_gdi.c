@@ -1,6 +1,15 @@
-/* Code corresponds to v1.19
-    https://github.com/OneLoneCoder/olcPixelGameEngine/tree/f5e2ce9d9772e24e33129d733dc63da50c4626f8
+/* A subset of the olcPixelGameEngine
+    https://github.com/OneLoneCoder/olcPixelGameEngine/
+
+   Code has been stripped down to the bare minimum required to
+   support Linux and Windows pixel drawing.
+
+   Information on the API can be found at:
+    https://github.com/OneLoneCoder/olcPixelGameEngine/wiki/olc::PixelGameEngine
+
+   Currently up to date with v1.19
 */
+
 
 #ifdef _WIN32  // Visual Studio compiler
 
@@ -82,8 +91,8 @@ static bool bAtomActive = false;  // JK, not yet implemented as atomic
 	static HWND   olc_hWnd = NULL;
 	static LPVOID sge      = NULL;
 
-	static LRESULT CALLBACK olc_WindowEvent ( HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam );
-	static HWND PGE_windowCreate ( void );
+	static LRESULT CALLBACK olc_WindowEvent  ( HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam );
+	static HWND             PGE_windowCreate ( void );
 
 #else
 
@@ -101,8 +110,8 @@ static bool bAtomActive = false;  // JK, not yet implemented as atomic
 #endif
 
 
-static enum Key mapKey ( unsigned int sym );
-static bool PGE_OpenGLCreate ( void );
+static enum Key mapKey           ( unsigned int sym );
+static bool     PGE_OpenGLCreate ( void );
 
 
 //================================================================================
@@ -140,6 +149,15 @@ static Sprite* Sprite_new ( int w, int h )
 	}
 
 	return sp;
+}
+
+static void Sprite_free ( Sprite* sp )
+{
+	free( sp->pColData );
+
+	free( sp );
+
+	sp = NULL;
 }
 
 static bool Sprite_setPixelRGB ( Sprite* sp, int32_t x, int32_t y, uint8_t r, uint8_t g, uint8_t b )
@@ -1043,7 +1061,7 @@ enum rcode PGE_construct (
 	}
 	else
 	{
-		appTitle = "Untitled";
+		appTitle = strdup( "Untitled" );
 	}
 
 	return OK;
@@ -1342,3 +1360,28 @@ enum rcode PGE_construct (
 	}
 
 #endif
+
+
+//================================================================================
+
+/* JK, attempt to free memory on exit.
+   TODO: all the x11 & GDI stuff
+*/
+enum rcode PGE_destroy ( void )
+{
+	#ifdef _WIN32
+
+		//
+
+	#else
+
+		XFree( olc_VisualInfo );
+
+	#endif
+
+	Sprite_free( pDefaultDrawTarget );
+
+	free( appTitle );
+
+	return OK;
+}
